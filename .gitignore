@@ -1,0 +1,25 @@
+# Environment
+.env
+*.env
+!.env.example
+idan_helper_agent
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+
+# Data
+data/
+*.db
+outputs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
