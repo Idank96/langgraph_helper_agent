@@ -37,12 +37,17 @@ langgraph_helper_agent/
 
 ### 1. Install Dependencies
 
-```bash
-#### Python 3.12 / 3.11 recommended
-
+#### Option 1: Using Conda
 ```bash
 conda create -n helper_agent_env python=3.12
 conda activate helper_agent_env
+pip install -r requirements.txt
+```
+
+#### Option 2: Using venv
+```bash
+python3.12 -m venv helper_agent_env
+source helper_agent_env/bin/activate  # On Windows: helper_agent_env\Scripts\activate
 pip install -r requirements.txt
 ```
 
@@ -51,6 +56,11 @@ pip install -r requirements.txt
 Create `.env` file in the root directory and add your keys:
 - `GOOGLE_API_KEY`: Get from [Google AI Studio](https://aistudio.google.com/app/apikey)
 - `TAVILY_API_KEY`: Get from [Tavily](https://tavily.com)
+```bash
+# For example
+GOOGLE_API_KEY="your_google_api_key"
+TAVILY_API_KEY="your_tavily_api_key"
+```
 
 ### 3. Prepare Offline Data
 
@@ -119,7 +129,7 @@ In `main.py:13`: Set `debug = True` to use the hardcoded variables.
 - **Embeddings**: Local HuggingFace sentence-transformers/all-MiniLM-L6-v2 (no API key required)
 
 ### Online Mode
-- **How it works**: Uses Tavily search API to find current information from the web
+- **How it works**: Uses Tavily search API to find current information from the web, specifically restricted to LangGraph and LangChain documentation sites only.
 - **Configuration**:
   - `search_depth="advanced"` for higher quality results
   - `include_domains=["langchain-ai.github.io", "python.langchain.com"]` to use official documentation

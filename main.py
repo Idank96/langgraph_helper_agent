@@ -8,8 +8,6 @@ load_dotenv()
 
 
 def main():
-
-    # Debug section - comment out when not debugging
     debug = False
     if debug:
         debug_args = {
