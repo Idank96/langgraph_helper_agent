@@ -5,16 +5,17 @@ An AI agent that helps developers work with LangGraph and LangChain. Supports bo
 ## Architecture
 
 ```
-User Question → Retrieve Node → Respond Node → Answer
+User Question → Retrieve Node → Respond Node → [Evaluate Node] → Answer
                      ↓
             [Offline: ChromaDB]
             [Online: Tavily API]
 ```
 
 **State Graph Components:**
-- `AgentState`: Tracks question, mode, context, and answer
+- `AgentState`: Tracks question, mode, context, answer, and evaluation scores
 - `retrieve_node`: Gets context from ChromaDB (offline) or Tavily (online)
 - `respond_node`: Uses Gemini to generate answer from context
+- `evaluate_node`: Optional LLM-as-a-Judge evaluation (faithfulness, relevancy, precision)
 
 ## Project Structure
 
@@ -24,12 +25,14 @@ langgraph_helper_agent/
 │   ├── agent.py       # LangGraph state graph
 │   ├── state.py       # AgentState definition
 │   ├── offline.py     # ChromaDB retrieval
-│   └── online.py      # Tavily search
+│   ├── online.py      # Tavily search
+│   └── evaluation.py  # LLM-as-a-Judge metrics
 ├── data/
 │   ├── raw/           # Downloaded llms.txt files
 │   └── vectorstore/   # ChromaDB storage
 ├── prepare_data.py    # Data preparation script
 ├── main.py            # CLI entry point
+├── evaluate_demo.py   # Evaluation demo script
 └── .env               # API keys (not in git)
 ```
 
@@ -76,6 +79,10 @@ This downloads:
 
 And creates a ChromaDB vector store in `data/vectorstore/`.
 
+build_vectorstore(force_rebuild=False) - Incrementally updates the vector store with new data when rate limits hit becuase of API constraints.
+build_vectorstore(force_rebuild=True) - Forces a complete rebuild of the vector store
+
+
 ## Usage
 
 ### Offline Mode (default)
@@ -113,6 +120,37 @@ python main.py --update_data
 **Update and answer** (updates data, then answers your question):
 ```bash
 python main.py --update_data --mode offline "How do I add persistence to a LangGraph agent?"
+```
+
+### RAG Evaluation with LLM-as-a-Judge
+
+Enable automatic evaluation of RAG quality using three key metrics:
+
+```bash
+python main.py --evaluate "How do I add persistence to a LangGraph agent?"
+```
+
+**Metrics:**
+- **Faithfulness**: Measures if the answer is grounded in the retrieved context (0.0-1.0)
+- **Answer Relevancy**: Evaluates how well the answer addresses the question (0.0-1.0)
+- **Context Precision**: Rates the quality of retrieved context for answering (0.0-1.0)
+
+**Output:**
+```
+============================================================
+LLM-AS-A-JUDGE EVALUATION SCORES
+============================================================
+  Faithfulness        : 0.92
+  Answer Relevancy    : 0.88
+  Context Precision   : 0.85
+============================================================
+```
+
+Scores are also saved to `outputs/{timestamp}/evaluation.json`.
+
+**Run standalone demo:**
+```bash
+python evaluate_demo.py
 ```
 
 ### Debug Mode
@@ -191,6 +229,74 @@ python main.py "What's the difference between StateGraph and MessageGraph?"
 python main.py "Show me how to implement human-in-the-loop with LangGraph"
 python main.py "How do I handle errors and retries in LangGraph nodes?"
 python main.py "What are best practices for state management in LangGraph?"
+
+# Run with evaluation
+python main.py --evaluate "How do I add persistence to a LangGraph agent?"
+python main.py --mode online --evaluate "What are the latest LangGraph features?"
+```
+
+## Output Example
+
+```
+(helper_agent_env) C:\idan\langgraph_helper_agent>python main.py --evaluate --mode online "How do I handle errors and retries in LangGraph nodes?"
+
+Question: "How do I handle errors and retries in LangGraph nodes?"
+
+Mode: online
+
+Evaluate: True
+
+You can handle errors and retries in LangGraph nodes by using the `retryPolicy` parameter when adding a node to the graph. This allows you to define conditions under which a node should be retried.
+
+Here's how you can add a retry policy to a node:
+
+import { RetryPolicy } from "@langchain/langgraph";
+import { StateGraph } from "@langchain/langgraph";
+
+// Define a function for your node
+async function queryDatabase() {
+  // ... your database query logic ...
+}
+
+// Create a new graph
+const graph = new StateGraph({});
+
+// Add a node with a retry policy
+graph.addNode("query_database", queryDatabase, {
+  retryPolicy: {
+    retryOn: (e: any): boolean => {
+      // Define the condition for retrying the node
+      return e instanceof Error; // Retry if an error occurs
+    },
+  },
+});
+
+In this example, the `retryPolicy` is defined with a `retryOn` function. This function checks if the error `e` is an instance of the `Error` class. If it is, the node will be retried. You can customize the `retryOn` function to implement more specific retry conditions based on the type of error or other criteria.
+
+Additionally, LangChain's `RunnableRetry` class (Python) offers more advanced retry mechanisms, including exponential backoff and jitter.  While the provided documents don't show a direct equivalent in LangGraphJS, the underlying principles are similar.  You'd configure the `retryPolicy` to use a similar strategy.
+
+from langchain_core.runnables import RunnableRetry
+
+# Example using RunnableRetry (Python)
+runnable = RunnableRetry.with_retry(
+    retry_if_exception_type=(Exception,),  # Retry on any Exception
+    stop_after_attempt=3  # Retry up to 3 times
+)
+
+Key points:
+
+*   **`retryPolicy` parameter:**  Use this when adding a node to the graph to configure retry behavior.
+*   **`retryOn` function:** Define the conditions for retrying within the `retryPolicy`.
+*   **Error Handling:** Implement robust error handling within your node functions to catch and appropriately handle exceptions.
+*   **Custom Conditions:** Tailor the `retryOn` function to retry based on specific error types or conditions relevant to your application.
+
+============================================================
+LLM-AS-A-JUDGE EVALUATION SCORES
+============================================================
+  Faithfulness        : 0.95
+  Answer Relevancy    : 0.95
+  Context Precision   : 0.85
+============================================================
 ```
 
 ## Technical Details
@@ -200,6 +306,7 @@ python main.py "What are best practices for state management in LangGraph?"
 - **Vector Store**: ChromaDB (file-based, no server needed)
 - **Search**: Tavily API (1000 free searches/month)
 - **Framework**: LangGraph for agent orchestration
+- **Evaluation**: LLM-as-a-Judge pattern with Gemini for RAG metrics (faithfulness, answer relevancy, context precision)
 
 ## Troubleshooting
 

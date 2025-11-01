@@ -12,11 +12,19 @@ def main():
     if debug:
         debug_args = {
             "question": "How do I add persistence to a LangGraph agent?",
-            "mode": "online"
+            "mode": "online",
+            "evaluate": True
         }
         print(f"Debug Mode: Using preset arguments\n")
         print(f"Mode: {debug_args['mode']}\n")
-        print(run_agent(debug_args["question"], debug_args["mode"]))
+        answer, scores = run_agent(debug_args["question"], debug_args["mode"], evaluate=debug_args["evaluate"])
+        print(answer)
+
+        if scores:
+            print(f"\n{'='*60}\nLLM-AS-A-JUDGE EVALUATION SCORES\n{'='*60}")
+            for metric, score in scores.items():
+                print(f"  {metric.replace('_', ' ').title():20s}: {score:.2f}")
+            print(f"{'='*60}\n")
         return
 
 
@@ -25,6 +33,7 @@ def main():
     parser.add_argument("question", nargs="?", help="Your question about LangGraph/LangChain")
     parser.add_argument("--mode", choices=["offline", "online"], help="offline (default) or online")
     parser.add_argument("--update_data", action="store_true", help="Update offline documentation data")
+    parser.add_argument("--evaluate", action="store_true", help="Run LLM-as-a-Judge evaluation")
     args = parser.parse_args()
 
     mode = args.mode or os.getenv("AGENT_MODE", "offline")
@@ -47,7 +56,15 @@ def main():
         exit(1)
 
     print(f"Mode: {mode}\n")
-    print(run_agent(args.question, mode))
+    print(f"Evaluate: {args.evaluate}\n")
+    answer, scores = run_agent(args.question, mode, evaluate=args.evaluate)
+    print(answer)
+
+    if scores:
+        print(f"\n{'='*60}\nLLM-AS-A-JUDGE EVALUATION SCORES\n{'='*60}")
+        for metric, score in scores.items():
+            print(f"  {metric.replace('_', ' ').title():20s}: {score:.2f}")
+        print(f"{'='*60}\n")
 
 
 if __name__ == "__main__":

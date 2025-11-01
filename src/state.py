@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import TypedDict, Dict
 
 
 class AgentState(TypedDict):
@@ -7,3 +7,4 @@ class AgentState(TypedDict):
     context: str
     answer: str
     output_dir: str
+    evaluation_scores: Dict[str, float]

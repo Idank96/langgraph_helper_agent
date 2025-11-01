@@ -11,7 +11,7 @@ def search_web(question: str, max_results: int = 5) -> str:
         client = TavilyClient(api_key=api_key)
         response = client.search(
             query=question,
-            search_depth="basic", # Could use advanced
+            search_depth="basic", # Could use 'advanced'
             max_results=max_results,
             include_domains=["langchain-ai.github.io", "python.langchain.com"],
             include_answer=False
