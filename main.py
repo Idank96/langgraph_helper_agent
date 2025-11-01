@@ -33,6 +33,7 @@ def main():
     parser.add_argument("question", nargs="?", help="Your question about LangGraph/LangChain")
     parser.add_argument("--mode", choices=["offline", "online"], help="offline (default) or online")
     parser.add_argument("--update_data", action="store_true", help="Update offline documentation data")
+    parser.add_argument("--force_rebuild", action="store_true", help="Force complete rebuild of vector store (use with --update_data)")
     parser.add_argument("--evaluate", action="store_true", help="Run LLM-as-a-Judge evaluation")
     args = parser.parse_args()
 
@@ -40,7 +41,7 @@ def main():
 
     if args.update_data:
         download_docs()
-        build_vectorstore(force_rebuild=True)
+        build_vectorstore(force_rebuild=args.force_rebuild)
         print("Documentation data updated successfully!\n")
 
     if not args.question:

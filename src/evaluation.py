@@ -1,5 +1,6 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import Dict
+import re
 
 
 class LLMJudgeEvaluator:
@@ -9,9 +10,28 @@ class LLMJudgeEvaluator:
     def _get_score(self, prompt: str) -> float:
         try:
             response = self.llm.invoke(prompt).content.strip()
-            score = float(response)
+
+            # Try to extract from <score>X.XX</score> tags first
+            match = re.search(r'<score>([\d.]+)</score>', response)
+            if match:
+                score_str = match.group(1)
+            else:
+                # Fallback: try to find any float pattern in the response
+                match = re.search(r'\b(\d+\.\d+)\b', response)
+                if match:
+                    score_str = match.group(1)
+                else:
+                    # Last resort: try direct parsing
+                    score_str = response
+
+            # Validate it's a valid float (only digits and decimal point)
+            if not re.match(r'^\d+\.?\d*$', score_str):
+                raise ValueError(f"Invalid score format: {score_str}")
+
+            score = float(score_str)
             return max(0.0, min(1.0, score))
-        except:
+        except Exception as e:
+            print(f"Warning: Failed to parse score from response: '{response[:100]}'. Error: {e}")
             return 0.0
 
     def evaluate_faithfulness(self, answer: str, context: str) -> float:

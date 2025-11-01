@@ -1,4 +1,5 @@
 import os
+import argparse
 import requests
 import chromadb
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -85,5 +86,9 @@ def build_vectorstore(force_rebuild=False):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Download and prepare LangGraph/LangChain documentation for offline use")
+    parser.add_argument("--force-rebuild", action="store_true", help="Force complete rebuild of vector store (deletes existing collection)")
+    args = parser.parse_args()
+
     download_docs()
-    build_vectorstore()
+    build_vectorstore(force_rebuild=args.force_rebuild)

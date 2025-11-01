@@ -85,8 +85,22 @@ This downloads:
 
 And creates a ChromaDB vector store in `data/vectorstore/`.
 
-build_vectorstore(force_rebuild=False) - Incrementally updates the vector store with new data when rate limits hit becuase of API constraints.
-build_vectorstore(force_rebuild=True) - Forces a complete rebuild of the vector store
+**Options:**
+- **Default (incremental mode)**: `python prepare_data.py`
+  - Resumes from existing vector store
+  - Useful when recovering from rate limits or interrupted builds
+- **Force rebuild**: `python prepare_data.py --force-rebuild`
+  - Deletes existing collection and rebuilds from scratch
+  - Use when you want fresh data or to fix corrupted vector store
+
+You can also update data directly through the main script:
+```bash
+# Incremental update
+python main.py --update_data "Your question here"
+
+# Force complete rebuild
+python main.py --update_data --force_rebuild "Your question here"
+```
 
 
 ## Usage
@@ -130,18 +144,19 @@ python main.py --update_data --mode offline "How do I add persistence to a LangG
 
 ### RAG Evaluation with LLM-as-a-Judge
 
-Enable automatic evaluation of RAG quality using three key metrics:
-
-```bash
-python main.py --evaluate "How do I add persistence to a LangGraph agent?"
-```
+Enable evaluation using three key metrics:
 
 **Metrics:**
 - **Faithfulness**: Measures if the answer is grounded in the retrieved context (0.0-1.0)
 - **Answer Relevancy**: Evaluates how well the answer addresses the question (0.0-1.0)
 - **Context Precision**: Rates the quality of retrieved context for answering (0.0-1.0)
 
-**Output:**
+**Command Example:**
+```bash
+python main.py --evaluate "How do I add persistence to a LangGraph agent?"
+```
+
+**Add at the end of the output:**
 ```
 ============================================================
 LLM-AS-A-JUDGE EVALUATION SCORES
@@ -153,11 +168,6 @@ LLM-AS-A-JUDGE EVALUATION SCORES
 ```
 
 Scores are also saved to `outputs/{timestamp}/evaluation.json`.
-
-**Run standalone demo:**
-```bash
-python evaluate_demo.py
-```
 
 ### Debug Mode
 
@@ -175,9 +185,10 @@ In `main.py:13`: Set `debug = True` to use the hardcoded variables.
 ### Online Mode
 - **How it works**: Uses Tavily search API to find current information from the web, specifically restricted to LangGraph and LangChain documentation sites only.
 - **Configuration**:
+  - `search_depth="basic"` for faster results
   - `search_depth="advanced"` for higher quality results
   - `include_domains=["langchain-ai.github.io", "python.langchain.com"]` to use official documentation
-  - `max_results=5` for comprehensive coverage
+  - `max_results=5` 
 - **Error Handling**: Automatically falls back to offline mode if online search fails
 
 ## Data Freshness Strategy
@@ -187,33 +198,44 @@ In `main.py:13`: Set `debug = True` to use the hardcoded variables.
 
 **Updating data**: Use the built-in `--update_data` flag:
 
-**Option 1**: Update only
+**Option 1**: Incremental update (default - resumes from existing data)
 ```bash
 python main.py --update_data
 ```
 
-**Option 2**: Update and then answer a question
+**Option 2**: Force complete rebuild (fresh start - recommended for ensuring data freshness)
 ```bash
-python main.py --update_data --mode offline "How do I add persistence to a LangGraph agent?"
+python main.py --update_data --force_rebuild
 ```
 
-**Automation**: Schedule weekly updates
+**Option 3**: Update and then answer a question
+```bash
+# Incremental update + question
+python main.py --update_data --mode offline "How do I add persistence to a LangGraph agent?"
+
+# Force rebuild + question
+python main.py --update_data --force_rebuild "How do I add persistence to a LangGraph agent?"
+```
+
+**Automation**: Schedule weekly updates with force rebuild for fresh data
 
 *Linux/Mac (cron):*
 ```bash
-0 0 * * 0 cd /path/to/project && python main.py --update_data
+0 0 * * 0 cd /path/to/project && python main.py --update_data --force_rebuild
 ```
 
 *Windows (Task Scheduler):*
 ```powershell
-schtasks /create /tn "Update LangGraph Docs" /tr "python C:\path\to\project\main.py --update_data" /sc weekly /d SUN /st 00:00
+schtasks /create /tn "Update LangGraph Docs" /tr "python C:\path\to\project\main.py --update_data --force_rebuild" /sc weekly /d SUN /st 00:00
 ```
 
-**Alternative method** (manual cleanup):
+**Alternative method** (manual cleanup - not recommended):
 ```bash
 rm -rf data/raw/* data/vectorstore/
 python prepare_data.py
 ```
+
+**Note**: The `--force_rebuild` flag is preferred over manual cleanup as it safely deletes only the ChromaDB collection while preserving directory structure.
 
 ### Online Mode
 Always fetches current information via Tavily search. No manual updates needed.
