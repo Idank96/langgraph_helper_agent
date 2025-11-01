@@ -39,7 +39,6 @@ langgraph_helper_agent/
 │   └── vectorstore/   # ChromaDB storage
 ├── prepare_data.py    # Data preparation script
 ├── main.py            # CLI entry point
-├── evaluate_demo.py   # Evaluation demo script
 └── .env               # API keys (not in git)
 ```
 
