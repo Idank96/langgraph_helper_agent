@@ -229,13 +229,11 @@ python main.py --update_data --force_rebuild "How do I add persistence to a Lang
 schtasks /create /tn "Update LangGraph Docs" /tr "python C:\path\to\project\main.py --update_data --force_rebuild" /sc weekly /d SUN /st 00:00
 ```
 
-**Alternative method** (manual cleanup - not recommended):
+**Alternative method**:
 ```bash
 rm -rf data/raw/* data/vectorstore/
 python prepare_data.py
 ```
-
-**Note**: The `--force_rebuild` flag is preferred over manual cleanup as it safely deletes only the ChromaDB collection while preserving directory structure.
 
 ### Online Mode
 Always fetches current information via Tavily search. No manual updates needed.
