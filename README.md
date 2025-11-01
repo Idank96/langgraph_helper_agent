@@ -142,7 +142,7 @@ python main.py --update_data
 python main.py --update_data --mode offline "How do I add persistence to a LangGraph agent?"
 ```
 
-### RAG Evaluation with LLM-as-a-Judge
+### Evaluation with LLM-as-a-Judge
 
 Enable evaluation using three key metrics:
 
@@ -251,7 +251,7 @@ python main.py --update_data
 # Update and answer question (option 2: update + query)
 python main.py --update_data --mode offline "How do I add persistence to a LangGraph agent?"
 
-# Example questions your agent should handle
+# Example questions
 python main.py "How do I add persistence to a LangGraph agent?"
 python main.py "What's the difference between StateGraph and MessageGraph?"
 python main.py "Show me how to implement human-in-the-loop with LangGraph"
@@ -355,3 +355,9 @@ LLM-AS-A-JUDGE EVALUATION SCORES
 **Rate limits**
 - Gemini free tier: 15 requests/minute
 - Tavily free tier: 1000 searches/month
+
+## Future Improvements
+- Add more data sources (e.g., GitHub repos, StackOverflow)
+- Use structured output parsing for LLM-as-a-Judge evaluation (langchain output parsers)
+- Add testing node: if the user asks for code samples, run the code and verify correctness
+- Convert from workflow to reasoning agent with tools to decide when to use online vs offline (based on:internet connectivity, question complexity)
