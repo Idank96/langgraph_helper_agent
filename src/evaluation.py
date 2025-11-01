@@ -11,7 +11,7 @@ class LLMJudgeEvaluator:
         try:
             response = self.llm.invoke(prompt).content.strip()
 
-            # Try to extract from <score>X.XX</score> tags first
+            # Extract <score>X.XX</score> tags 
             match = re.search(r'<score>([\d.]+)</score>', response)
             if match:
                 score_str = match.group(1)
@@ -21,7 +21,7 @@ class LLMJudgeEvaluator:
                 if match:
                     score_str = match.group(1)
                 else:
-                    # Last resort: try direct parsing
+                    # Try direct parsing
                     score_str = response
 
             # Validate it's a valid float (only digits and decimal point)
