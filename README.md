@@ -171,7 +171,7 @@ Scores are also saved to `outputs/{timestamp}/evaluation.json`.
 
 ### Debug Mode
 
-In `main.py:13`: Set `debug = True` to use the hardcoded variables.
+In `main.py`: Set `debug = True` to enable debug mode.
 
 ## Operating Modes
 
