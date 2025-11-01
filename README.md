@@ -156,7 +156,7 @@ Enable evaluation using three key metrics:
 python main.py --evaluate "How do I add persistence to a LangGraph agent?"
 ```
 
-**Add at the end of the output:**
+**This will append the following to the output:**
 ```
 ============================================================
 LLM-AS-A-JUDGE EVALUATION SCORES
