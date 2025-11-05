@@ -2,7 +2,7 @@
 
 An AI agent that helps developers work with LangGraph and LangChain. Supports both offline (local documentation) and online (web search) modes.
 
-
+[![Watch the video](https://raw.githubusercontent.com/yourusername/langgraph_helper_agent/main/thumbnail.jpg)](https://raw.githubusercontent.com/yourusername/langgraph_helper_agent/main/Recording_2025-11-05_204106.mp4)
 
 <video width="640" height="360" controls>
   <source src="https://raw.githubusercontent.com/Idank96/langgraph_helper_agent/master/Recording%202025-11-05%20204106.mp4" type="video/mp4">
