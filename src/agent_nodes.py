@@ -135,7 +135,7 @@ def retrieve_node(state: AgentState) -> AgentState:
 
             _log(f"  ✓ Retrieved {len(context)} characters", state)
 
-            # Create a one-line summary of the retrieved context
+            # Create a one-line summary of the retrieved context for debugging
             context_summary = context[:500].replace('\n', ' ').strip()
             if len(context) > 500:
                 context_summary += "..."
@@ -172,7 +172,7 @@ def retrieve_node(state: AgentState) -> AgentState:
                 current_query = refined_query
             else:
                 # Last attempt - accept what we have
-                _log(f"  ⚠ Max attempts reached, accepting current context\n", state)
+                _log(f"  Max attempts reached, accepting current context\n", state)
                 state["context"] = context
                 state["retrieval_attempts"] = attempt
 

@@ -42,7 +42,7 @@ def build_agent_graph(with_evaluation: bool = False):
     """Build the agentic graph with conditional routing and iterative refinement."""
     workflow = StateGraph(AgentState)
 
-    # Add all nodes upfront
+    # Nodes
     workflow.add_node("router", router_node)
     workflow.add_node("retrieve", retrieve_node)
     workflow.add_node("respond", respond_node)
@@ -53,7 +53,7 @@ def build_agent_graph(with_evaluation: bool = False):
 
     workflow.set_entry_point("router")
 
-    # Add all edges
+    # Edges
     workflow.add_conditional_edges(
         "router",
         route_from_router,

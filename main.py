@@ -16,7 +16,6 @@ def main():
             "evaluate": True,
             "verbose": True
         }
-        # Set verbose mode for debug
         if debug_args.get("verbose"):
             os.environ["AGENT_VERBOSE"] = "true"
             print("Verbose mode enabled - agent decisions will be logged\n")
@@ -44,7 +43,6 @@ def main():
 
     mode = args.mode or os.getenv("AGENT_MODE", "offline")
 
-    # Set verbose mode for agent logging
     if args.verbose:
         os.environ["AGENT_VERBOSE"] = "true"
         print("Verbose mode enabled - agent decisions will be logged\n")
