@@ -2,12 +2,7 @@
 
 An AI agent that helps developers work with LangGraph and LangChain. Supports both offline (local documentation) and online (web search) modes.
 
-
-
-
-
-
-
+[Example Video](https://www.youtube.com/watch?v=MztJmr0hu2U&feature=youtu.be)
 
 ## Architecture
 
