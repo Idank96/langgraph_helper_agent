@@ -2,7 +2,7 @@ import os
 from tavily import TavilyClient
 
 
-def search_web(question: str, max_results: int = 5) -> str:
+def search_web(question: str, max_results: int = 10) -> str:
     api_key = os.getenv("TAVILY_API_KEY")
     if not api_key:
         raise ValueError("TAVILY_API_KEY not found")
@@ -11,7 +11,7 @@ def search_web(question: str, max_results: int = 5) -> str:
         client = TavilyClient(api_key=api_key)
         response = client.search(
             query=question,
-            search_depth="basic", # Could use 'advanced'
+            search_depth="advanced", # Could use 'basic' / 'advanced'
             max_results=max_results,
             include_domains=["langchain-ai.github.io", "python.langchain.com"],
             include_answer=False

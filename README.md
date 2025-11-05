@@ -11,34 +11,96 @@ https://github.com/user-attachments/assets/1a149a59-8cb2-492a-bb85-a4e85ef7596e
 
 ## Architecture
 
+This system uses an **agentic architecture** where an LLM makes intelligent routing decisions rather than following a fixed workflow. The agent can iteratively refine its retrieval and responses based on quality validation.
+
+### Agentic Flow
+
 ```
-User Question → Retrieve Node → Respond Node → [Evaluate Node] → Answer
-                     ↓
-            [Offline: ChromaDB]
-            [Online: Tavily API]
+                    ┌──────────────┐
+                    │    Router    │ ← LLM-driven decision maker
+                    │  (decides)   │
+                    └──────┬───────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+        ▼                  ▼                  ▼
+   ┌─────────┐       ┌─────────┐       ┌─────────┐
+   │Retrieve │       │ Respond │       │ Reflect │
+   │ (with   │       │ (with   │       │ (self-  │
+   │validate)│       │ refine) │       │critique)│
+   └────┬────┘       └────┬────┘       └────┬────┘
+        │                 │                  │
+        └─────────────────┴──────────────────┘
+                          │
+                          ▼
+                      [Evaluate] → END
 ```
 
-**State Graph Components:**
-- `AgentState`: Tracks question, mode, context, answer, and evaluation scores
-- `retrieve_node`: Gets context from ChromaDB (offline) or Tavily (online)
-- `respond_node`: Uses Gemini to generate answer from context
-- `evaluate_node`: Optional LLM-as-a-Judge evaluation (faithfulness, relevancy, precision)
+### Intelligent Agent Features
+
+**1. Smart Routing** (`router_node`)
+- **Documentation-First Approach**: Strongly biased toward retrieving official documentation for 95%+ of questions
+- Only skips retrieval for trivial definitional questions (e.g., "What does LLM stand for?")
+- Routes to retrieve, respond, reflect, or end based on current state
+- LLM makes intelligent decisions about when documentation is truly unnecessary
+
+**2. Validated Retrieval** (`retrieve_node`)
+- Retrieves documentation with up to 3 retry attempts
+- Validates context quality using LLM
+- Refines search queries if initial retrieval is insufficient
+- Auto-fallback: online→offline if web search fails
+
+**3. Adaptive Response** (`respond_node`)
+- Generates answers from context or knowledge
+- Incorporates refinement suggestions from reflection
+- Iteratively improves based on quality feedback
+
+**4. Self-Reflection** (`reflect_node`)
+- Evaluates answer quality on 0-10 scale
+- Triggers regeneration if score < 7
+- Limited to 3 iterations to prevent infinite loops
+
+### Agent Tools
+
+The system uses 4 specialized tools:
+
+| Tool | Purpose | Returns |
+|------|---------|---------|
+| `retrieve_documentation` | Fetch docs from offline/online sources | Retrieved text |
+| `validate_context_quality` | Check if context is relevant & sufficient | `{is_relevant, is_sufficient, missing_info}` |
+| `refine_search_query` | Generate improved query based on feedback | Refined query string |
+| `check_answer_completeness` | Score answer quality and suggest improvements | `{quality_score, needs_improvement, suggestions}` |
+
+### State Graph Components
+
+- **AgentState**: Tracks question, mode, context, answer, evaluation scores, retrieval attempts, iteration count, refinement notes, and routing decisions
+- **Conditional Routing**: Graph uses conditional edges based on LLM decisions, not fixed paths
+- **Iteration Limits**: Max 3 iterations for both retrieval refinement and answer regeneration
+- **Agent Trace**: Saves decision-making history to `outputs/{timestamp}/agent_trace.json`
 
 ## Project Structure
 
 ```
 langgraph_helper_agent/
 ├── src/
-│   ├── agent.py       # LangGraph state graph
-│   ├── state.py       # AgentState definition
+│   ├── agent.py       # Agentic graph with conditional routing
+│   ├── agent_nodes.py # Router, retrieve, respond, reflect nodes
+│   ├── tools.py       # LangChain tools for retrieval & validation
+│   ├── state.py       # AgentState with agentic fields
 │   ├── offline.py     # ChromaDB retrieval
 │   ├── online.py      # Tavily search
 │   └── evaluation.py  # LLM-as-a-Judge metrics
 ├── data/
 │   ├── raw/           # Downloaded llms.txt files
 │   └── vectorstore/   # ChromaDB storage
+├── outputs/
+│   └── {timestamp}/
+│       ├── answer.md       # Generated answer
+│       ├── context.txt     # Retrieved context
+│       ├── agent_trace.json # Agent decision history
+│       └── evaluation.json # Optional eval scores
 ├── prepare_data.py    # Data preparation script
-├── main.py            # CLI entry point
+├── main.py            # CLI entry point with --verbose flag
 └── .env               # API keys (not in git)
 ```
 
@@ -142,6 +204,89 @@ python main.py --update_data
 python main.py --update_data --mode offline "How do I add persistence to a LangGraph agent?"
 ```
 
+### Verbose Mode (Agent Decision Logging)
+
+Enable verbose logging to see the agent's decision-making process in real-time:
+
+```bash
+python main.py --verbose "How do I add persistence to a LangGraph agent?"
+```
+
+**What you'll see with --verbose:**
+- Router decisions (retrieve/respond/reflect/end)
+- Retrieval attempts and validation results
+- Context quality assessments (relevant/sufficient)
+- Query refinement when needed
+- Answer quality scores and improvement suggestions
+- Iteration counts
+
+**Example verbose output (documentation retrieval):**
+```
+━━━ ROUTER NODE ━━━
+Current state: context=False, answer=False, skip_retrieval=False, iteration=0/3
+→ Asking LLM: Should we retrieve documentation?
+   LLM decision: RETRIEVE
+→ Router decision: RETRIEVE
+
+━━━ RETRIEVE NODE ━━━
+Retrieval mode: 'offline', max attempts: 3
+
+  Attempt 1/3
+  Query: 'How do I add persistence to a LangGraph agent?'
+  ✓ Retrieved 8432 characters
+  Validation:
+    - Is Relevant: ✓ Yes
+    - Is Sufficient: ✓ Yes
+  ✓ SUCCESS: Context quality acceptable after 1 attempt(s)
+
+━━━ ROUTER NODE ━━━
+Current state: context=True, answer=False, skip_retrieval=False, iteration=0/3
+→ Router decision: RESPOND (have context, need answer)
+
+━━━ RESPOND NODE ━━━
+Generating answer using 8432 characters of retrieved context
+  Invoking LLM to generate answer...
+  ✓ Answer generated successfully (1247 characters)
+
+━━━ ROUTER NODE ━━━
+Current state: context=True, answer=True, skip_retrieval=False, iteration=0/3
+→ Router decision: REFLECT (iteration 0/3)
+
+━━━ REFLECT NODE ━━━
+Evaluating answer quality using LLM critic (iteration 0/3)...
+
+  Quality Assessment:
+    Score: 8/10
+    Rating: ✓ Excellent
+    Decision: ACCEPT (quality threshold met)
+  ✓ Answer is acceptable, proceeding to completion
+```
+
+**Benefits:**
+- Understand how the agent makes decisions
+- Debug retrieval and validation issues
+- See quality scores and refinement loops
+- Track iteration counts and limits
+
+**Agent trace file:** All decisions are saved to `outputs/{timestamp}/agent_trace.json` regardless of verbose mode.
+
+**When does the agent retrieve documentation vs answer from knowledge?**
+
+The agent uses a documentation-first approach:
+
+✅ **Will RETRIEVE documentation** (95%+ of questions):
+- "How do I add persistence to a LangGraph agent?"
+- "Show me an example of using StateGraph"
+- "What's the difference between StateGraph and MessageGraph?"
+- "How to implement human-in-the-loop?"
+- "Best practices for error handling in LangGraph"
+
+❌ **Will SKIP retrieval** (only trivial questions):
+- "What does LLM stand for?"
+- "What is an API?"
+
+This ensures answers are always grounded in official documentation, meeting the assignment's core requirement.
+
 ### Evaluation with LLM-as-a-Judge
 
 Enable evaluation using three key metrics:
@@ -154,6 +299,11 @@ Enable evaluation using three key metrics:
 **Command Example:**
 ```bash
 python main.py --evaluate "How do I add persistence to a LangGraph agent?"
+```
+
+**Combine with verbose mode:**
+```bash
+python main.py --verbose --evaluate "How do I add persistence to a LangGraph agent?"
 ```
 
 **This will append the following to the output:**
@@ -171,7 +321,7 @@ Scores are also saved to `outputs/{timestamp}/evaluation.json`.
 
 ### Debug Mode
 
-In `main.py`: Set `debug = True` to enable debug mode.
+In `main.py`: Set `debug = True` to enable debug mode with preset arguments and verbose logging.
 
 ## Operating Modes
 
@@ -188,7 +338,7 @@ In `main.py`: Set `debug = True` to enable debug mode.
   - `search_depth="basic"` for faster results
   - `search_depth="advanced"` for higher quality results
   - `include_domains=["langchain-ai.github.io", "python.langchain.com"]` to use official documentation
-  - `max_results=5` 
+  - `max_results=10` 
 - **Error Handling**: Automatically falls back to offline mode if online search fails
 
 ## Data Freshness Strategy
@@ -358,4 +508,6 @@ LLM-AS-A-JUDGE EVALUATION SCORES
 - Add more data sources (e.g., GitHub repos, StackOverflow)
 - Use structured output parsing for LLM-as-a-Judge evaluation (langchain output parsers)
 - Add testing node: if the user asks for code samples, run the code and verify correctness
-- Convert from workflow to reasoning agent with tools to decide when to use online vs offline (based on:internet connectivity, question complexity)
+- Add multi-agent collaboration for complex tasks
+- Implement persistent memory with LangGraph checkpointing for multi-turn conversations
+- Add visualization of agent decision tree

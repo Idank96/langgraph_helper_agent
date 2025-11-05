@@ -2,10 +2,12 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import Dict
 import re
 
+MODEL_NAME = "gemini-2.0-flash"
+
 
 class LLMJudgeEvaluator:
     def __init__(self):
-        self.llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
+        self.llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0)
 
     def _get_score(self, prompt: str) -> float:
         try:

@@ -17,6 +17,7 @@ env/
 data/
 *.db
 outputs/
+google_embedding_data/
 
 # IDE
 .vscode/

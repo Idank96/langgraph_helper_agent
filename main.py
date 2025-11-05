@@ -13,8 +13,14 @@ def main():
         debug_args = {
             "question": "How do I add persistence to a LangGraph agent?",
             "mode": "online",
-            "evaluate": True
+            "evaluate": True,
+            "verbose": True
         }
+        # Set verbose mode for debug
+        if debug_args.get("verbose"):
+            os.environ["AGENT_VERBOSE"] = "true"
+            print("Verbose mode enabled - agent decisions will be logged\n")
+
         print(f"Debug Mode: Using preset arguments\n")
         print(f"Mode: {debug_args['mode']}\n")
         answer, scores = run_agent(debug_args["question"], debug_args["mode"], evaluate=debug_args["evaluate"])
@@ -27,15 +33,21 @@ def main():
             print(f"{'='*60}\n")
         return
 
-    parser = argparse.ArgumentParser(description="LangGraph Helper Agent")
+    parser = argparse.ArgumentParser(description="LangGraph Helper Agent - Agentic System")
     parser.add_argument("question", nargs="?", help="Your question about LangGraph/LangChain")
     parser.add_argument("--mode", choices=["offline", "online"], help="offline (default) or online")
     parser.add_argument("--update_data", action="store_true", help="Update offline documentation data")
     parser.add_argument("--force_rebuild", action="store_true", help="Force complete rebuild of vector store (use with --update_data)")
     parser.add_argument("--evaluate", action="store_true", help="Run LLM-as-a-Judge evaluation")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging of agent decisions")
     args = parser.parse_args()
 
     mode = args.mode or os.getenv("AGENT_MODE", "offline")
+
+    # Set verbose mode for agent logging
+    if args.verbose:
+        os.environ["AGENT_VERBOSE"] = "true"
+        print("Verbose mode enabled - agent decisions will be logged\n")
 
     if args.update_data:
         download_docs()
