@@ -96,7 +96,9 @@ langgraph_helper_agent/
 ├── outputs/
 │   └── {timestamp}/
 │       ├── answer.md       # Generated answer
-│       ├── context.txt     # Retrieved context
+│       ├── context.txt     # Retrieved context (offline mode)
+│       ├── sources.txt     # Retrieved sources (online mode)
+│       ├── chat.md         # Full prompt and answer for debugging
 │       ├── agent_trace.json # Agent decision history
 │       └── evaluation.json # Optional eval scores
 ├── prepare_data.py    # Data preparation script
@@ -154,6 +156,7 @@ And creates a ChromaDB vector store in `data/vectorstore/`.
 - **Force rebuild**: `python prepare_data.py --force-rebuild`
   - Deletes existing collection and rebuilds from scratch
   - Use when you want fresh data or to fix corrupted vector store
+  - Note: Both `--force-rebuild` and `--force_rebuild` work (argparse auto-converts)
 
 You can also update data directly through the main script:
 ```bash
@@ -335,10 +338,9 @@ In `main.py`: Set `debug = True` to enable debug mode with preset arguments and 
 ### Online Mode
 - **How it works**: Uses Tavily search API to find current information from the web, specifically restricted to LangGraph and LangChain documentation sites only.
 - **Configuration**:
-  - `search_depth="basic"` for faster results
-  - `search_depth="advanced"` for higher quality results
+  - `search_depth="advanced"` (hardcoded for higher quality results)
   - `include_domains=["langchain-ai.github.io", "python.langchain.com"]` to use official documentation
-  - `max_results=10` 
+  - `max_results=10`
 - **Error Handling**: Automatically falls back to offline mode if online search fails
 
 ## Data Freshness Strategy
@@ -483,6 +485,10 @@ LLM-AS-A-JUDGE EVALUATION SCORES
 - **Search**: Tavily API (1000 free searches/month)
 - **Framework**: LangGraph for agent orchestration
 - **Evaluation**: LLM-as-a-Judge pattern with Gemini for RAG metrics (faithfulness, answer relevancy, context precision)
+- **Text Chunking**:
+  - Chunk size: 1000 characters
+  - Chunk overlap: 200 characters
+  - Batch size: 100 documents per batch for vectorstore building
 
 ## Troubleshooting
 
