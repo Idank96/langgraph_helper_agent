@@ -5,7 +5,9 @@ from src.tools import (
     retrieve_documentation,
     validate_context_quality,
     refine_search_query,
-    check_answer_completeness
+    check_answer_completeness,
+    extract_keywords,
+    retrieve_with_keywords
 )
 
 MODEL_NAME = "gemini-2.0-flash"
@@ -106,22 +108,73 @@ Respond with ONLY one word - "RETRIEVE" or "ANSWER":"""
     return state
 
 
+def extract_keywords_node(state: AgentState) -> AgentState:
+    """Extract keywords from the question for multi-query retrieval."""
+    _log("\n------- EXTRACT KEYWORDS NODE -------", state)
+
+    question = state["question"]
+    _log(f"Extracting keywords from: '{question}'", state)
+
+    try:
+        keywords = extract_keywords(question)
+        state["extracted_keywords"] = keywords
+
+        if keywords:
+            _log(f"  ✓ Extracted {len(keywords)} keyword(s): {', '.join(keywords)}", state)
+            _log(f"  → Will perform {len(keywords) + 1} searches: original + {len(keywords)} keyword(s)\n", state)
+        else:
+            _log(f"  → No additional keywords extracted (simple query)", state)
+            _log(f"  → Will perform 1 search with original question\n", state)
+
+    except Exception as e:
+        _log(f"  ✗ Error extracting keywords: {str(e)}", state)
+        _log(f"  → Fallback: using original question only\n", state)
+        state["extracted_keywords"] = []
+
+    return state
+
+
 def retrieve_node(state: AgentState) -> AgentState:
     """Retrieve documentation with validation and retry logic."""
     _log("\n------- RETRIEVE NODE -------", state)
 
     max_attempts = 3
     current_query = state["question"]
+    keywords = state.get("extracted_keywords", [])
     mode = state.get("mode", "offline")
+    restrict_to_official = True  # Start with official docs only
     _log(f"Retrieval mode: '{mode}', max attempts: {max_attempts}", state)
 
     for attempt in range(1, max_attempts + 1):
         _log(f"\n  Attempt {attempt}/{max_attempts}", state)
         _log(f"  Query: '{current_query[:80]}...'", state) if len(current_query) > 80 else _log(f"  Query: '{current_query}'", state)
 
+        # Special handling for online mode: if first attempt failed, try unrestricted search
+        if mode == "online" and attempt == 2 and restrict_to_official:
+            _log(f"  → Switching to unrestricted web search (searching beyond official docs)", state)
+            restrict_to_official = False
+            # Reset query to original for unrestricted search
+            current_query = state["question"]
+
         try:
-            # Retrieve documentation using the tool
-            context = retrieve_documentation.invoke({"query": current_query, "mode": mode})
+            # Retrieve documentation using keyword-enhanced retrieval if keywords exist
+            if keywords and attempt == 1:
+                # Use multi-query retrieval on first attempt
+                _log(f"  Using multi-query retrieval with {len(keywords)} keyword(s): {keywords}", state)
+                if mode == "offline":
+                    context = retrieve_with_keywords(current_query, keywords, mode)
+                else:
+                    context = retrieve_with_keywords(current_query, keywords, mode, restrict_to_official=restrict_to_official)
+            else:
+                # Use standard retrieval for refinement attempts
+                if mode == "offline":
+                    context = retrieve_documentation.invoke({"query": current_query, "mode": mode})
+                else:
+                    context = retrieve_documentation.invoke({
+                        "query": current_query,
+                        "mode": mode,
+                        "restrict_to_official": restrict_to_official
+                    })
 
             # Validate the retrieved context
             validation = validate_context_quality(
@@ -133,7 +186,18 @@ def retrieve_node(state: AgentState) -> AgentState:
             is_sufficient = validation.get("is_sufficient", True)
             missing_info = validation.get("missing_info", "")
 
-            _log(f"  ✓ Retrieved {len(context)} characters", state)
+            # Calculate retrieval statistics
+            char_count = len(context)
+            # Rough token estimate: ~4 characters per token (common approximation)
+            estimated_tokens = char_count // 4
+
+            # Count sources (separated by "=== Results for:" markers if multi-query retrieval was used)
+            source_count = context.count("=== Results for:")
+            if source_count == 0:
+                source_count = 1  # Standard single retrieval
+
+            search_scope = "official docs only" if (mode == "online" and restrict_to_official) else ("unrestricted web" if mode == "online" else "offline vector DB")
+            _log(f"  ✓ Retrieved {char_count} characters (~{estimated_tokens:,} tokens) from {source_count} source(s) [{search_scope}]", state)
 
             # Create a one-line summary of the retrieved context for debugging
             context_summary = context[:500].replace('\n', ' ').strip()
@@ -161,15 +225,21 @@ def retrieve_node(state: AgentState) -> AgentState:
 
                 break
 
-            # If not good and we have attempts remaining, refine the query
+            # If not good and we have attempts remaining, refine the query or try unrestricted search
             if attempt < max_attempts:
-                _log(f"  ⚠ Context quality insufficient, refining query...", state)
-                refined_query = refine_search_query(
-                    original_question=state["question"],
-                    feedback=missing_info or "Context not specific enough"
-                )
-                _log(f"  → Refined query: '{refined_query}'", state)
-                current_query = refined_query
+                # For online mode: if first attempt with official docs failed, try unrestricted next
+                if mode == "online" and attempt == 1 and restrict_to_official:
+                    _log(f"  ⚠ Official docs insufficient, will try unrestricted web search next", state)
+                    # Don't refine query - we'll use original question with unrestricted search
+                else:
+                    # Refine query for subsequent attempts
+                    _log(f"  ⚠ Context quality insufficient, refining query...", state)
+                    refined_query = refine_search_query(
+                        original_question=state["question"],
+                        feedback=missing_info or "Context not specific enough"
+                    )
+                    _log(f"  → Refined query: '{refined_query}'", state)
+                    current_query = refined_query
             else:
                 # Last attempt - accept what we have
                 _log(f"  Max attempts reached, accepting current context\n", state)

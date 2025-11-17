@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from langgraph.graph import StateGraph, END
 from src.state import AgentState
-from src.agent_nodes import router_node, retrieve_node, respond_node, reflect_node
+from src.agent_nodes import router_node, extract_keywords_node, retrieve_node, respond_node, reflect_node
 from src.evaluation import LLMJudgeEvaluator
 
 
@@ -21,7 +21,7 @@ def route_from_router(state: AgentState) -> str:
     next_action = state.get("next_action", "end")
 
     if next_action == "retrieve":
-        return "retrieve"
+        return "extract_keywords"  # Go to keyword extraction before retrieval
     elif next_action == "respond":
         return "respond"
     elif next_action == "reflect":
@@ -44,6 +44,7 @@ def build_agent_graph(with_evaluation: bool = False):
 
     # Nodes
     workflow.add_node("router", router_node)
+    workflow.add_node("extract_keywords", extract_keywords_node)
     workflow.add_node("retrieve", retrieve_node)
     workflow.add_node("respond", respond_node)
     workflow.add_node("reflect", reflect_node)
@@ -58,13 +59,14 @@ def build_agent_graph(with_evaluation: bool = False):
         "router",
         route_from_router,
         {
-            "retrieve": "retrieve",
+            "extract_keywords": "extract_keywords",
             "respond": "respond",
             "reflect": "reflect",
             "end": "evaluate" if with_evaluation else END
         }
     )
 
+    workflow.add_edge("extract_keywords", "retrieve")
     workflow.add_edge("retrieve", "router")
     workflow.add_edge("respond", "router")
 
@@ -84,7 +86,7 @@ def build_agent_graph(with_evaluation: bool = False):
 
 
 def run_agent(question: str, mode: str = "offline", evaluate: bool = False):
-    """Run the agentic system with iterative refinement and smart routing."""
+    """Run the agentic system with iterative refinement and routing."""
     output_dir = f"outputs/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     os.makedirs(output_dir, exist_ok=True)
 
@@ -101,13 +103,14 @@ def run_agent(question: str, mode: str = "offline", evaluate: bool = False):
         "max_iterations": 3,
         "needs_refinement": False,
         "next_action": "",
-        "refinement_notes": "",
-        "skip_retrieval": False
+        "refinement_notes": "", # Notes on why refinement is needed
+        "skip_retrieval": False,
+        "extracted_keywords": []
     }
 
     result = build_agent_graph(with_evaluation=evaluate).invoke(
         initial_state,
-        config={"recursion_limit": 50}
+        config={"recursion_limit": 50} # To prevent infinite loops
     )
 
     agent_trace = {

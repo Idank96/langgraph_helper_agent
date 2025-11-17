@@ -20,3 +20,4 @@ class AgentState(TypedDict):
     next_action: str  # Router's decision: "retrieve", "respond", "reflect", "end"
     refinement_notes: str  # Suggestions for improvement in next iteration
     skip_retrieval: bool  # If LLM decides it can answer without docs
+    extracted_keywords: List[str]  # Keywords extracted for multi-query retrieval

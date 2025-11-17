@@ -67,6 +67,7 @@ def main():
     print(f"Mode: {mode}\n")
     print(f"Evaluate: {args.evaluate}\n")
     answer, scores = run_agent(args.question, mode, evaluate=args.evaluate)
+    print("\nFinal Answer:\n")
     print(answer)
 
     if scores:
