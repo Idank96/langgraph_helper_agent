@@ -11,7 +11,7 @@ def main():
     debug = False
     if debug:
         debug_args = {
-            "question": "How do I add persistence to a LangGraph agent?",
+            "question": "What is the capital of France?",
             "mode": "online",
             "evaluate": True,
             "verbose": True

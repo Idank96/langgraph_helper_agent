@@ -42,7 +42,6 @@ def router_node(state: AgentState) -> AgentState:
 
     has_context = bool(state.get("context", "").strip())
     has_answer = bool(state.get("answer", "").strip())
-    skip_retrieval = state.get("skip_retrieval", False)
     iteration = state.get("iteration", 0)
     max_iterations = state.get("max_iterations", 3)
     needs_refinement = state.get("needs_refinement", False)
