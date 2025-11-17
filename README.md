@@ -16,16 +16,16 @@ This system uses an **agentic architecture** where an LLM makes intelligent rout
                     │  (decides)   │
                     └──────┬───────┘
                            │
-        ┌──────────────────┼──────────────────┐
-        │                  │                  │
-        ▼                  ▼                  ▼
-   ┌─────────┐       ┌─────────┐       ┌─────────┐
-   │Retrieve │       │ Respond │       │ Reflect │
-   │ (with   │       │ (with   │       │ (self-  │
-   │validate)│       │ refine) │       │critique)│
-   └────┬────┘       └────┬────┘       └────┬────┘
-        │                 │                  │
-        └─────────────────┴──────────────────┘
+        ┌──────────────────┼──────────────────┬──────────────┐
+        │                  │                  │              │
+        ▼                  ▼                  ▼              ▼
+   ┌─────────┐       ┌─────────┐       ┌─────────┐   ┌─────────┐
+   │Extract  │       │Retrieve │       │ Respond │   │ Reflect │
+   │Keywords │       │ (with   │       │ (with   │   │ (self-  │
+   │         │       │validate)│       │ refine) │   │critique)│
+   └────┬────┘       └────┬────┘       └────┬────┘   └────┬────┘
+        │                 │                  │              │
+        └─────────────────┴──────────────────┴──────────────┘
                           │
                           ▼
                       [Evaluate] → END
@@ -35,56 +35,83 @@ This system uses an **agentic architecture** where an LLM makes intelligent rout
 
 **1. Smart Routing** (`router_node`)
 - **Documentation-First Approach**: Strongly biased toward retrieving official documentation for 95%+ of questions
+- **Safety Gates**: Relevance check (filters non-LangGraph/LangChain questions) and safety check (detects jailbreak attempts)
 - Only skips retrieval for trivial definitional questions (e.g., "What does LLM stand for?")
-- Routes to retrieve, respond, reflect, or end based on current state
+- Routes to extract_keywords, retrieve, respond, reflect, or end based on current state
 - LLM makes intelligent decisions about when documentation is truly unnecessary
+- **Loop Prevention**: Tracks router invocations (>15 = infinite loop detection)
 
-**2. Validated Retrieval** (`retrieve_node`)
+**2. Keyword Extraction** (`extract_keywords_node`)
+- Uses LLM to extract 1-4 technical terms from the question (e.g., "StateGraph", "SqliteSaver")
+- Excludes generic terms ("LangGraph", "LangChain", "difference")
+- Enables multi-query retrieval for comprehensive context coverage
+
+**3. Validated Retrieval** (`retrieve_node`)
+- **Multi-Query Strategy**: First attempt uses extracted keywords for parallel searches; subsequent attempts use refined single queries
 - Retrieves documentation with up to 3 retry attempts
-- Validates context quality using LLM
+- Validates context quality using LLM (checks both relevance and sufficiency)
 - Refines search queries if initial retrieval is insufficient
+- **Online Mode Fallback**: Attempt 1 uses official docs only; Attempt 2 uses unrestricted web search
 - Auto-fallback: online→offline if web search fails
+- Saves context to `context.txt` (offline) or `sources.txt` (online)
 
-**3. Adaptive Response** (`respond_node`)
+**4. Adaptive Response** (`respond_node`)
 - Generates answers from context or knowledge
+- **Disclaimer System**: Adds warning when context is insufficient/irrelevant
 - Incorporates refinement suggestions from reflection
 - Iteratively improves based on quality feedback
+- Saves `answer.md` and `chat.md` (prompt + answer)
 
-**4. Self-Reflection** (`reflect_node`)
+**5. Self-Reflection** (`reflect_node`)
 - Evaluates answer quality on 0-10 scale
-- Triggers regeneration if score < 7
+- **Quality Thresholds**: 8-10 = Excellent (ACCEPT), 7 = Good (ACCEPT), 5-6 = Fair (REFINE if iterations remain), 0-4 = Poor (REFINE)
+- Triggers regeneration if score < 7 and iterations < 3
+- Sets `needs_refinement` flag and provides specific improvement suggestions
 - Limited to 3 iterations to prevent infinite loops
 
 ### Agent Tools
 
-The system uses 4 specialized tools:
+The system uses 6 specialized LangChain tools:
 
 | Tool | Purpose | Returns |
 |------|---------|---------|
 | `retrieve_documentation` | Fetch docs from offline/online sources | Retrieved text |
 | `validate_context_quality` | Check if context is relevant & sufficient | `{is_relevant, is_sufficient, missing_info}` |
 | `refine_search_query` | Generate improved query based on feedback | Refined query string |
-| `check_answer_completeness` | Score answer quality and suggest improvements | `{quality_score, needs_improvement, suggestions}` |
+| `extract_keywords` | Extract 1-4 technical terms from question | `{keywords: list}` |
+| `retrieve_with_keywords` | Multi-query retrieval using extracted keywords | Combined context with section headers |
+| `check_answer_completeness` | Score answer quality on 4 criteria (Completeness, Accuracy, Clarity, Practicality) | `{quality_score: 0-10, needs_improvement: bool, suggestions: str}` |
 
 ### State Graph Components
 
-- **AgentState**: Tracks question, mode, context, answer, evaluation scores, retrieval attempts, iteration count, refinement notes, and routing decisions
-- **Conditional Routing**: Graph uses conditional edges based on LLM decisions, not fixed paths
-- **Iteration Limits**: Max 3 iterations for both retrieval refinement and answer regeneration
+- **AgentState**: TypedDict tracking complete state including:
+  - Core fields: `question`, `mode`, `context`, `answer`, `output_dir`
+  - Evaluation: `evaluation_scores` (dict)
+  - Iteration control: `retrieval_attempts`, `iteration`, `max_iterations`
+  - Refinement: `needs_refinement`, `refinement_notes`
+  - Routing: `next_action`, `last_node`, `node_history`
+  - Keywords: `skip_retrieval`, `extracted_keywords`
+  - Validation: `context_is_sufficient`, `context_is_relevant`
+  - Quality: `quality_score`, `routing_error`
+- **Conditional Routing**: Universal `route_by_next_action()` function based on LLM decisions, not fixed paths
+- **Iteration Limits**: Max 3 iterations for both retrieval refinement and answer regeneration; Max 50 recursion limit safety
 - **Agent Trace**: Saves decision-making history to `outputs/{timestamp}/agent_trace.json`
+- **Graph Nodes**: 5 core nodes (router, extract_keywords, retrieve, respond, reflect) + optional evaluate node
 
 ## Project Structure
 
 ```
 langgraph_helper_agent/
 ├── src/
-│   ├── agent.py       # Agentic graph with conditional routing
-│   ├── agent_nodes.py # Router, retrieve, respond, reflect nodes
-│   ├── tools.py       # LangChain tools for retrieval & validation
-│   ├── state.py       # AgentState with agentic fields
-│   ├── offline.py     # ChromaDB retrieval
-│   ├── online.py      # Tavily search
-│   └── evaluation.py  # LLM-as-a-Judge metrics
+│   ├── agent.py           # Agentic graph with conditional routing
+│   ├── agent_nodes.py     # Router, extract_keywords, retrieve, respond, reflect nodes
+│   ├── tools.py           # LangChain tools for retrieval & validation
+│   ├── state.py           # AgentState TypedDict with agentic fields
+│   ├── offline.py         # ChromaDB retrieval
+│   ├── online.py          # Tavily search
+│   ├── evaluation.py      # LLM-as-a-Judge metrics
+│   ├── rate_limiter.py    # API quota management (10 RPM for Gemini)
+│   └── tool_calling_agent.py  # Alternative ReAct agent (experimental)
 ├── data/
 │   ├── raw/           # Downloaded llms.txt files
 │   └── vectorstore/   # ChromaDB storage
@@ -96,8 +123,13 @@ langgraph_helper_agent/
 │       ├── chat.md         # Full prompt and answer for debugging
 │       ├── agent_trace.json # Agent decision history
 │       └── evaluation.json # Optional eval scores
+├── examples/          # Example outputs and test cases
 ├── prepare_data.py    # Data preparation script
 ├── main.py            # CLI entry point with --verbose flag
+├── test_keyword_extraction.py  # Testing keyword extraction
+├── ARCHITECTURE.md    # Hybrid tool-calling design documentation
+├── REFINEMENT_LOOPS.md  # Advanced refinement features
+├── BUGFIX_REFINEMENT.md  # Implementation notes
 └── .env               # API keys (not in git)
 ```
 
@@ -122,12 +154,13 @@ pip install -r requirements.txt
 ### 2. Configure API Keys
 
 Create `.env` file in the root directory and add your keys:
-- `GOOGLE_API_KEY`: Get from [Google AI Studio](https://aistudio.google.com/app/apikey)
-- `TAVILY_API_KEY`: Get from [Tavily](https://tavily.com)
+- **GOOGLE_API_KEY** (required): Get from [Google AI Studio](https://aistudio.google.com/app/apikey) - Used for Gemini 2.0 Flash LLM
+- **TAVILY_API_KEY** (optional): Get from [Tavily](https://tavily.com) - Only needed for online mode
+
 ```bash
-# For example
+# .env file example
 GOOGLE_API_KEY="your_google_api_key"
-TAVILY_API_KEY="your_tavily_api_key"
+TAVILY_API_KEY="your_tavily_api_key"  # Optional - only for online mode
 ```
 
 ### 3. Prepare Offline Data
@@ -329,6 +362,8 @@ In `main.py`: Set `debug = True` to enable debug mode with preset arguments and 
   - LangGraph: `https://langchain-ai.github.io/langgraph/llms-full.txt`
   - LangChain: `https://python.langchain.com/llms.txt`
 - **Embeddings**: Local HuggingFace sentence-transformers/all-MiniLM-L6-v2 (no API key required)
+- **Retrieval**: k=10 top documents using cosine similarity search
+- **Performance**: Fast retrieval (<100ms typical) with no API rate limits
 
 ### Online Mode
 - **How it works**: Uses Tavily search API to find current information from the web, specifically restricted to LangGraph and LangChain documentation sites only.
@@ -474,16 +509,24 @@ LLM-AS-A-JUDGE EVALUATION SCORES
 
 ## Technical Details
 
-- **LLM**: Google Gemini 2.0 Flash (free tier)
-- **Embeddings**: HuggingFace sentence-transformers/all-MiniLM-L6-v2 (local, no API needed)
-- **Vector Store**: ChromaDB (file-based, no server needed)
+- **LLM**: Google Gemini 2.0 Flash (free tier, 15 RPM limit)
+- **Rate Limiting**: Conservative 10 RPM limit enforced via `RateLimiter` class to prevent API exhaustion
+- **Embeddings**: HuggingFace sentence-transformers/all-MiniLM-L6-v2 (384 dimensions, local, no API needed)
+- **Vector Store**: ChromaDB (file-based persistent client, no server needed)
+  - Collection: "langgraph_docs"
+  - Metadata tracking: source field ("langgraph" or "langchain")
 - **Search**: Tavily API (1000 free searches/month)
-- **Framework**: LangGraph for agent orchestration
+  - Search depth: "advanced" (hardcoded for quality)
+  - Domain restriction: langchain-ai.github.io, python.langchain.com (first attempt)
+  - Fallback: Unrestricted web search (second attempt)
+- **Framework**: LangGraph StateGraph for agent orchestration
 - **Evaluation**: LLM-as-a-Judge pattern with Gemini for RAG metrics (faithfulness, answer relevancy, context precision)
 - **Text Chunking**:
+  - Splitter: RecursiveCharacterTextSplitter
   - Chunk size: 1000 characters
   - Chunk overlap: 200 characters
   - Batch size: 100 documents per batch for vectorstore building
+  - Typical result: Thousands of chunks from full documentation
 
 ## Troubleshooting
 
@@ -502,8 +545,28 @@ LLM-AS-A-JUDGE EVALUATION SCORES
 - Possible causes: invalid API key, rate limit exceeded, network error, or no results found
 
 **Rate limits**
-- Gemini free tier: 15 requests/minute
+- Gemini free tier: 15 requests/minute (system uses conservative 10 RPM limit with automatic wait management)
 - Tavily free tier: 1000 searches/month
+
+**Verbose mode shows no agent decisions**
+- Make sure you're using the `--verbose` flag: `python main.py --verbose "your question"`
+- Agent trace is always saved to `outputs/{timestamp}/agent_trace.json` regardless of verbose mode
+
+## Key Design Principles
+
+1. **Documentation-First Philosophy**: 95%+ questions trigger retrieval for accuracy and grounding
+2. **Centralized Routing**: Router node makes ALL routing decisions (not distributed across nodes)
+3. **Quality Over Speed**: Iterative refinement loops prioritize answer quality
+4. **Graceful Degradation**: Multiple fallback layers (online→offline, best-effort answers with disclaimers)
+5. **Transparency**: Explicit disclaimers when context insufficient, detailed agent traces
+6. **Safety-First**: Multiple validation gates (relevance, safety, loop prevention, iteration limits)
+7. **Production-Ready**: Rate limiting, error handling, observability features built-in
+
+## Additional Documentation
+
+- **ARCHITECTURE.md**: Hybrid tool-calling design and trade-offs between ReAct autonomy vs. predictability
+- **REFINEMENT_LOOPS.md**: Search refinement loop and quality refinement loop implementation details
+- **BUGFIX_REFINEMENT.md**: Implementation notes on validation flow fixes and rate limiting
 
 ## Future Improvements
 - Add more data sources (e.g., GitHub repos, StackOverflow)
@@ -512,3 +575,4 @@ LLM-AS-A-JUDGE EVALUATION SCORES
 - Add multi-agent collaboration for complex tasks
 - Implement persistent memory with LangGraph checkpointing for multi-turn conversations
 - Add visualization of agent decision tree
+- Enhance keyword extraction with more sophisticated NLP techniques

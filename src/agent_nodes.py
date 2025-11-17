@@ -19,7 +19,7 @@ def _log(message: str, state: AgentState):
 
 
 def router_node(state: AgentState) -> AgentState:
-    """Central brain: Makes ALL routing decisions based on state analysis and LLM strategic reasoning."""
+    """Makes ALL routing decisions based on state analysis and LLM strategic reasoning."""
     _log("\n------- ROUTER NODE -------", state)
 
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0)
