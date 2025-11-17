@@ -3,16 +3,7 @@ from tavily import TavilyClient
 
 
 def search_web(question: str, max_results: int = 10, restrict_to_official: bool = True) -> str:
-    """Search the web for documentation.
-
-    Args:
-        question: The search query
-        max_results: Maximum number of results to return
-        restrict_to_official: If True, only search official LangChain docs. If False, search anywhere.
-
-    Returns:
-        Formatted search results as string
-    """
+    """Search the web for documentation."""
     api_key = os.getenv("TAVILY_API_KEY")
     if not api_key:
         raise ValueError("TAVILY_API_KEY not found")
@@ -20,7 +11,6 @@ def search_web(question: str, max_results: int = 10, restrict_to_official: bool 
     try:
         client = TavilyClient(api_key=api_key)
 
-        # Build search parameters
         search_params = {
             "query": question,
             "search_depth": "advanced",
@@ -28,7 +18,6 @@ def search_web(question: str, max_results: int = 10, restrict_to_official: bool 
             "include_answer": False
         }
 
-        # Only restrict domains if restrict_to_official is True
         if restrict_to_official:
             search_params["include_domains"] = ["langchain-ai.github.io", "python.langchain.com"]
 

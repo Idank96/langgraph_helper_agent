@@ -25,7 +25,6 @@ def retrieve_documentation(query: str, mode: str = "offline", restrict_to_offici
         else:
             return search_web(query, restrict_to_official=restrict_to_official)
     except Exception as e:
-        # Fallback to offline if online fails
         try:
             fallback_context = retrieve_context(query)
             return f"[Online search failed, using offline docs]\n\n{fallback_context}"
@@ -34,15 +33,7 @@ def retrieve_documentation(query: str, mode: str = "offline", restrict_to_offici
 
 
 def validate_context_quality(question: str, context: str) -> dict:
-    """Validate if retrieved context is relevant and sufficient to answer the question.
-
-    Args:
-        question: The user's question
-        context: Retrieved documentation context
-
-    Returns:
-        Dictionary with keys: is_relevant (bool), is_sufficient (bool), missing_info (str)
-    """
+    """Validate if retrieved context is relevant and sufficient to answer the question."""
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0)
 
     prompt = f"""Analyze if the provided context is relevant and sufficient to answer the question.
@@ -50,7 +41,7 @@ def validate_context_quality(question: str, context: str) -> dict:
 Question: {question}
 
 Context:
-{context[:2000]}  # Limit context length for validation
+{context[:2000]}
 
 CRITICAL RULES FOR is_relevant:
 1. Set is_relevant to TRUE only if the context DIRECTLY addresses the specific question being asked
@@ -93,8 +84,6 @@ Your analysis:"""
 
     try:
         response = llm.invoke(prompt).content
-        # Try to parse JSON from response
-        # Handle both raw JSON and markdown code blocks
         if "```json" in response:
             json_str = response.split("```json")[1].split("```")[0].strip()
         elif "```" in response:
@@ -104,14 +93,12 @@ Your analysis:"""
 
         result = json.loads(json_str)
 
-        # Ensure required keys exist
         return {
             "is_relevant": result.get("is_relevant", True),
             "is_sufficient": result.get("is_sufficient", True),
             "missing_info": result.get("missing_info", "")
         }
     except Exception as e:
-        # Fallback: assume context is valid if validation fails
         return {
             "is_relevant": True,
             "is_sufficient": True,
@@ -120,15 +107,7 @@ Your analysis:"""
 
 
 def refine_search_query(original_question: str, feedback: str) -> str:
-    """Generate an improved search query based on feedback about missing information.
-
-    Args:
-        original_question: The original user question
-        feedback: Description of what information is missing
-
-    Returns:
-        Improved search query as string
-    """
+    """Generate an improved search query based on feedback about missing information."""
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0)
 
     prompt = f"""Generate a more specific search query to find better documentation.
@@ -148,23 +127,14 @@ Improved Query:"""
 
     try:
         refined_query = llm.invoke(prompt).content.strip()
-        # Remove quotes if LLM added them
         refined_query = refined_query.strip('"\'')
         return refined_query if refined_query else original_question
     except Exception as e:
-        # Fallback to original question if refinement fails
         return original_question
 
 
 def extract_keywords(question: str) -> list:
-    """Extract key technical terms and concepts from a question for targeted searching.
-
-    Args:
-        question: The user's question
-
-    Returns:
-        List of extracted keywords/key concepts
-    """
+    """Extract key technical terms and concepts from a question for targeted searching."""
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0)
 
     prompt = f"""Extract the key technical terms, concepts, or class names from this question that should be searched separately.
@@ -203,7 +173,6 @@ Your response:"""
 
     try:
         response = llm.invoke(prompt).content
-        # Try to parse JSON from response
         if "```json" in response:
             json_str = response.split("```json")[1].split("```")[0].strip()
         elif "```" in response:
@@ -214,49 +183,33 @@ Your response:"""
         result = json.loads(json_str)
         keywords = result.get("keywords", [])
 
-        # Ensure we return a list
         if isinstance(keywords, list):
             return keywords
         else:
             return []
     except Exception as e:
-        # Fallback: return empty list if extraction fails
         return []
 
 
 def retrieve_with_keywords(question: str, keywords: list, mode: str = "offline", restrict_to_official: bool = True) -> str:
     """Retrieve documentation using both the original question and extracted keywords.
 
-    Performs multiple searches (original query + each keyword) and combines results,
-    removing duplicates.
-
-    Args:
-        question: The original user question
-        keywords: List of extracted keywords to search separately
-        mode: "offline" for local ChromaDB or "online" for Tavily web search
-        restrict_to_official: If True (default), only search official docs. If False, search anywhere.
-
-    Returns:
-        Combined and deduplicated documentation as string
-    """
+    Performs multiple searches and combines results, removing duplicates."""
     all_results = []
     seen_content = set()
 
-    # Search with original question
     try:
         if mode == "offline":
             original_result = retrieve_context(question)
         else:
             original_result = search_web(question, restrict_to_official=restrict_to_official)
 
-        # Add original result if not empty
         if original_result and original_result not in seen_content:
             all_results.append(f"=== Results for: {question} ===\n{original_result}")
             seen_content.add(original_result)
     except Exception as e:
-        pass  # Continue with keyword searches even if original fails
+        pass
 
-    # Search with each keyword
     for keyword in keywords:
         try:
             if mode == "offline":
@@ -264,31 +217,20 @@ def retrieve_with_keywords(question: str, keywords: list, mode: str = "offline",
             else:
                 keyword_result = search_web(keyword, restrict_to_official=restrict_to_official)
 
-            # Add keyword result if not empty and not duplicate
             if keyword_result and keyword_result not in seen_content:
                 all_results.append(f"=== Results for: {keyword} ===\n{keyword_result}")
                 seen_content.add(keyword_result)
         except Exception as e:
-            continue  # Continue with next keyword if this one fails
+            continue
 
-    # Combine all results
     if all_results:
         return "\n\n".join(all_results)
     else:
-        # Fallback: if all searches failed, return error message
         return "Error: Unable to retrieve any documentation"
 
 
 def check_answer_completeness(question: str, answer: str) -> dict:
-    """Evaluate the quality and completeness of a generated answer.
-
-    Args:
-        question: The original question
-        answer: The generated answer to evaluate
-
-    Returns:
-        Dictionary with keys: quality_score (int 0-10), needs_improvement (bool), suggestions (str)
-    """
+    """Evaluate the quality and completeness of a generated answer."""
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0)
 
     prompt = f"""Evaluate the quality of this answer to a LangGraph/LangChain question.
@@ -316,7 +258,6 @@ Your evaluation:"""
 
     try:
         response = llm.invoke(prompt).content
-        # Try to parse JSON from response
         if "```json" in response:
             json_str = response.split("```json")[1].split("```")[0].strip()
         elif "```" in response:
@@ -334,7 +275,6 @@ Your evaluation:"""
             "suggestions": result.get("suggestions", "")
         }
     except Exception as e:
-        # Fallback: assume answer is acceptable if evaluation fails
         return {
             "quality_score": 7,
             "needs_improvement": False,

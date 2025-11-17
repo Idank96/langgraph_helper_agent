@@ -13,20 +13,16 @@ class LLMJudgeEvaluator:
         try:
             response = self.llm.invoke(prompt).content.strip()
 
-            # Extract <score>X.XX</score> tags 
             match = re.search(r'<score>([\d.]+)</score>', response)
             if match:
                 score_str = match.group(1)
             else:
-                # Fallback: try to find any float pattern in the response
                 match = re.search(r'\b(\d+\.\d+)\b', response)
                 if match:
                     score_str = match.group(1)
                 else:
-                    # Try direct parsing
                     score_str = response
 
-            # Validate it's a valid float (only digits and decimal point)
             if not re.match(r'^\d+\.?\d*$', score_str):
                 raise ValueError(f"Invalid score format: {score_str}")
 

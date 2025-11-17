@@ -51,7 +51,6 @@ def build_vectorstore(force_rebuild=False):
 
     client = chromadb.PersistentClient(path=VECTORSTORE_DIR)
 
-    # Delete existing collection
     if force_rebuild:
         try:
             client.delete_collection("langgraph_docs")
@@ -61,7 +60,6 @@ def build_vectorstore(force_rebuild=False):
         collection = client.create_collection("langgraph_docs", metadata={"hnsw:space": "cosine"})
         existing_count = 0
     else:
-        # Continue from existing collection
         try:
             collection = client.get_collection("langgraph_docs")
             existing_count = collection.count()

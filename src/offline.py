@@ -19,3 +19,4 @@ def retrieve_context(question: str, k: int = 10) -> str:
         n_results=k
     )
     return "\n\n".join(results["documents"][0])
+

@@ -16,26 +16,20 @@ def evaluate_node(state: AgentState) -> AgentState:
     return state
 
 
-def route_from_router(state: AgentState) -> str:
-    """Router conditional edge: decides where to go based on next_action."""
+def route_by_next_action(state: AgentState) -> str:
+    """Universal router: all nodes use next_action to decide destination."""
     next_action = state.get("next_action", "end")
 
-    if next_action == "retrieve":
-        return "extract_keywords"  # Go to keyword extraction before retrieval
-    elif next_action == "respond":
-        return "respond"
-    elif next_action == "reflect":
-        return "reflect"
-    else:
+    # Validate not a self-loop (safety check)
+    last_node = state.get("last_node", "")
+    if next_action == last_node and next_action != "":
+        # Error: node tried to call itself
+        error_msg = f"Self-loop detected: {next_action} tried to call itself"
+        state["routing_error"] = error_msg
+        print(f"⚠ WARNING: {error_msg}, routing to END")
         return "end"
 
-
-def route_from_reflect(state: AgentState) -> str:
-    """Reflect conditional edge: regenerate answer or go to end."""
-    if state.get("needs_refinement", False):
-        return "respond"
-    else:
-        return "end"
+    return next_action
 
 
 def build_agent_graph(with_evaluation: bool = False):
@@ -54,30 +48,24 @@ def build_agent_graph(with_evaluation: bool = False):
 
     workflow.set_entry_point("router")
 
-    # Edges
-    workflow.add_conditional_edges(
-        "router",
-        route_from_router,
-        {
-            "extract_keywords": "extract_keywords",
-            "respond": "respond",
-            "reflect": "reflect",
-            "end": "evaluate" if with_evaluation else END
-        }
-    )
+    # Universal routing: all nodes connect via next_action
+    # Each node can route to any other node based on router's decision
+    routing_map = {
+        "router": "router",
+        "extract_keywords": "extract_keywords",
+        "retrieve": "retrieve",
+        "respond": "respond",
+        "reflect": "reflect",
+        "end": "evaluate" if with_evaluation else END
+    }
 
-    workflow.add_edge("extract_keywords", "retrieve")
-    workflow.add_edge("retrieve", "router")
-    workflow.add_edge("respond", "router")
-
-    workflow.add_conditional_edges(
-        "reflect",
-        route_from_reflect,
-        {
-            "respond": "respond",
-            "end": "evaluate" if with_evaluation else END
-        }
-    )
+    # Add conditional edges from ALL nodes using universal router
+    for node_name in ["router", "extract_keywords", "retrieve", "respond", "reflect"]:
+        workflow.add_conditional_edges(
+            node_name,
+            route_by_next_action,
+            routing_map
+        )
 
     if with_evaluation:
         workflow.add_edge("evaluate", END)
@@ -105,7 +93,14 @@ def run_agent(question: str, mode: str = "offline", evaluate: bool = False):
         "next_action": "",
         "refinement_notes": "", # Notes on why refinement is needed
         "skip_retrieval": False,
-        "extracted_keywords": []
+        "extracted_keywords": [],
+        # Autonomous routing fields
+        "last_node": "",
+        "node_history": [],
+        "context_is_sufficient": False,
+        "context_is_relevant": False,
+        "quality_score": 0,
+        "routing_error": ""
     }
 
     result = build_agent_graph(with_evaluation=evaluate).invoke(
