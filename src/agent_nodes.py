@@ -230,7 +230,7 @@ Respond with ONLY one word - "RETRIEVE" or "ANSWER":"""
             state["last_node"] = "router"
             return state
 
-        # Validate context quality
+        
         try:
             validation = validate_context_quality(
                 question=state["question"],
@@ -358,6 +358,10 @@ def extract_keywords_node(state: AgentState) -> AgentState:
     """Extract keywords from the question for multi-query retrieval."""
     _log("\n------- EXTRACT KEYWORDS NODE -------", state)
 
+    node_history = state.get("node_history", [])
+    node_history.append("extract_keywords")
+    state["node_history"] = node_history
+
     question = state["question"]
     _log(f"Extracting keywords from: '{question}'", state)
 
@@ -387,6 +391,10 @@ def extract_keywords_node(state: AgentState) -> AgentState:
 def retrieve_node(state: AgentState) -> AgentState:
     """Retrieve documentation and return raw context."""
     _log("\n------- RETRIEVE NODE -------", state)
+
+    node_history = state.get("node_history", [])
+    node_history.append("retrieve")
+    state["node_history"] = node_history
 
     keywords = state.get("extracted_keywords", [])
     mode = state.get("mode", "offline")
@@ -457,6 +465,10 @@ def retrieve_node(state: AgentState) -> AgentState:
 def respond_node(state: AgentState) -> AgentState:
     """Generate answer using LLM, with or without retrieved context."""
     _log("\n------- RESPOND NODE -------", state)
+
+    node_history = state.get("node_history", [])
+    node_history.append("respond")
+    state["node_history"] = node_history
 
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0)
 
@@ -555,6 +567,10 @@ After the disclaimer, provide the best answer you can with the available informa
 def reflect_node(state: AgentState) -> AgentState:
     """Self-critique the generated answer and decide if refinement is needed."""
     _log("\n------- REFLECT NODE -------", state)
+
+    node_history = state.get("node_history", [])
+    node_history.append("reflect")
+    state["node_history"] = node_history
 
     iteration = state.get("iteration", 0)
     max_iterations = state.get("max_iterations", 3)

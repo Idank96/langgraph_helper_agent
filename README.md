@@ -35,7 +35,7 @@ This system uses an **agentic architecture** where an LLM makes intelligent rout
 ### Intelligent Agent Features
 
 **1. Smart Routing** (`router_node`)
-- **Documentation-First Approach**: Strongly biased toward retrieving official documentation for 95%+ of questions
+- **Documentation-First Approach**: Strongly biased toward retrieving official documentation
 - **Safety Gates**: Relevance check (filters non-LangGraph/LangChain questions) and safety check (detects jailbreak attempts)
 - **Context Validation**: After retrieval, validates context quality (relevance and sufficiency) and decides whether to retry with refined query or proceed
 - **Intelligent Retry Logic**: Up to 3 retrieval attempts with query refinement based on missing information
@@ -113,9 +113,7 @@ langgraph_helper_agent/
 │   ├── state.py           # AgentState TypedDict with agentic fields
 │   ├── offline.py         # ChromaDB retrieval
 │   ├── online.py          # Tavily search
-│   ├── evaluation.py      # LLM-as-a-Judge metrics
-│   ├── rate_limiter.py    # API quota management (10 RPM for Gemini)
-│   └── tool_calling_agent.py  # Alternative ReAct agent (experimental)
+│   └── evaluation.py      # LLM-as-a-Judge metrics
 ├── data/
 │   ├── raw/           # Downloaded llms.txt files
 │   └── vectorstore/   # ChromaDB storage
@@ -323,7 +321,7 @@ Evaluating answer quality using LLM critic (iteration 0/3)...
 
 The agent uses a documentation-first approach:
 
-✅ **Will RETRIEVE documentation** (95%+ of questions):
+✅ **Will RETRIEVE documentation** (most questions):
 - "How do I add persistence to a LangGraph agent?"
 - "Show me an example of using StateGraph"
 - "What's the difference between StateGraph and MessageGraph?"
@@ -334,7 +332,7 @@ The agent uses a documentation-first approach:
 - "What does LLM stand for?"
 - "What is an API?"
 
-This ensures answers are always grounded in official documentation, meeting the assignment's core requirement.
+This ensures answers are always grounded in official documentation.
 
 ### Evaluation with LLM-as-a-Judge
 
@@ -572,7 +570,7 @@ LLM-AS-A-JUDGE EVALUATION SCORES
 
 ## Key Design Principles
 
-1. **Documentation-First Philosophy**: 95%+ questions trigger retrieval for accuracy and grounding
+1. **Documentation-First Philosophy**: Most questions trigger retrieval for accuracy and grounding
 2. **Centralized Routing & Validation**: Router node makes ALL routing decisions AND validates context quality (separation of concerns: retrieve fetches, router decides)
 3. **Quality Over Speed**: Iterative refinement loops prioritize answer quality
 4. **Graceful Degradation**: Multiple fallback layers (online→offline, best-effort answers with disclaimers)

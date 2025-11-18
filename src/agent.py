@@ -118,6 +118,13 @@ def run_agent(question: str, mode: str = "offline", evaluate: bool = False):
         "iterations": result.get("iteration", 0),
         "skip_retrieval": result.get("skip_retrieval", False),
         "refinement_notes": result.get("refinement_notes", ""),
+        "node_history": result.get("node_history", []),
+        "extracted_keywords": result.get("extracted_keywords", []),
+        "context_is_relevant": result.get("context_is_relevant", False),
+        "context_is_sufficient": result.get("context_is_sufficient", False),
+        "quality_score": result.get("quality_score", 0),
+        "final_action": result.get("next_action", ""),
+        "routing_error": result.get("routing_error", ""),
         "timestamp": datetime.now().isoformat()
     }
     open(f"{output_dir}/agent_trace.json", "w").write(json.dumps(agent_trace, indent=2))

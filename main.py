@@ -8,7 +8,7 @@ load_dotenv()
 
 
 def main():
-    debug = True
+    debug = False
     if debug:
         debug_args = {
             "question": "What's the difference between StateGraph and MessageGraph?",
