@@ -8,10 +8,10 @@ load_dotenv()
 
 
 def main():
-    debug = False
+    debug = True
     if debug:
         debug_args = {
-            "question": "What is the capital of France?",
+            "question": "How do I add persistence to a LangGraph agent?",
             "mode": "online",
             "evaluate": True,
             "verbose": True

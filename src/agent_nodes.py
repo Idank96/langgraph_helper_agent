@@ -23,7 +23,7 @@ def router_node(state: AgentState) -> AgentState:
     _log("\n------- ROUTER NODE -------", state)
 
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0)
-
+    
     node_history = state.get("node_history", [])
     node_history.append("router")
     state["node_history"] = node_history

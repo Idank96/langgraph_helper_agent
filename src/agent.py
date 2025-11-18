@@ -88,7 +88,7 @@ def run_agent(question: str, mode: str = "offline", evaluate: bool = False):
         "messages": [],
         "retrieval_attempts": 0,
         "iteration": 0,
-        "max_iterations": 3,
+        "max_iterations": 3, # iterations of the main retrieval + answering loop
         "needs_refinement": False,
         "next_action": "",
         "refinement_notes": "", # Notes on why refinement is needed
@@ -96,7 +96,7 @@ def run_agent(question: str, mode: str = "offline", evaluate: bool = False):
         "extracted_keywords": [],
         # Autonomous routing fields
         "last_node": "",
-        "node_history": [],
+        "node_history": [], # for debugging
         "context_is_sufficient": False,
         "context_is_relevant": False,
         "quality_score": 0,
