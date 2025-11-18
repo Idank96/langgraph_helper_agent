@@ -51,47 +51,7 @@ def router_node(state: AgentState) -> AgentState:
 
     _log(f"State: context={has_context}, answer={has_answer}, iteration={iteration}/{max_iterations}", state)
 
-    # ========== DECISION 0: Check Question Relevance (Entry Gate) ==========
-    if not last_node:
-        _log(f"→ Checking if question is relevant to LangChain/LangGraph...", state)
-        relevance_prompt = f"""You are a LangGraph/LangChain documentation assistant validator.
-
-Question: {state['question']}
-
-Is this question related to LangChain, LangGraph, or their ecosystem (LangSmith, LCEL, etc.)?
-
-Respond with ONLY one word:
-- "RELEVANT" if the question is about LangChain/LangGraph features, usage, implementation, concepts, or integrations
-- "IRRELEVANT" if the question is completely unrelated to LangChain/LangGraph
-
-Examples:
-- "How do I create a StateGraph?" → RELEVANT
-- "What is the weather today?" → IRRELEVANT
-- "How to use LCEL?" → RELEVANT
-- "Tell me a joke" → IRRELEVANT
-- "What is the capital of France?" → IRRELEVANT
-- "How do I add memory to my agent?" → RELEVANT
-
-Decision:"""
-
-        try:
-            relevance_response = llm.invoke(relevance_prompt).content.strip().upper()
-            _log(f"   Relevance check: {relevance_response}", state)
-
-            if "IRRELEVANT" in relevance_response:
-                _log("→ Router decision: END (question not relevant to LangChain/LangGraph)", state)
-                state["answer"] = "I'm a specialized assistant for LangChain and LangGraph documentation. Your question doesn't appear to be related to LangChain or LangGraph. I can only help with questions about LangChain, LangGraph, LangSmith, and related tools and concepts."
-                state["skip_retrieval"] = True
-                state["next_action"] = "end"
-                state["last_node"] = "router"
-                open(f"{state['output_dir']}/answer.md", "w", encoding="utf-8").write(state["answer"])
-                return state
-        except Exception as e:
-            _log(f"   Relevance check error: {str(e)}, assuming relevant", state)
-
-        _log(f"   Question is relevant, proceeding...", state)
-
-    # ========== DECISION 0.5: Safety Check for Bad Instructions ==========
+    # ========== DECISION 0: Safety Check for Bad Instructions (Entry Gate) ==========
     if not last_node:
         _log(f"→ Checking for malicious instructions or harmful requests...", state)
         safety_prompt = f"""You are a safety validator for a LangChain/LangGraph documentation assistant.
@@ -154,6 +114,46 @@ Decision:"""
             _log(f"   Safety check error: {str(e)}, assuming safe", state)
 
         _log(f"   Question passed safety check, proceeding...", state)
+
+    # ========== DECISION 0.5: Check Question Relevance ==========
+    if not last_node:
+        _log(f"→ Checking if question is relevant to LangChain/LangGraph...", state)
+        relevance_prompt = f"""You are a LangGraph/LangChain documentation assistant validator.
+
+Question: {state['question']}
+
+Is this question related to LangChain, LangGraph, or their ecosystem (LangSmith, LCEL, etc.)?
+
+Respond with ONLY one word:
+- "RELEVANT" if the question is about LangChain/LangGraph features, usage, implementation, concepts, or integrations
+- "IRRELEVANT" if the question is completely unrelated to LangChain/LangGraph
+
+Examples:
+- "How do I create a StateGraph?" → RELEVANT
+- "What is the weather today?" → IRRELEVANT
+- "How to use LCEL?" → RELEVANT
+- "Tell me a joke" → IRRELEVANT
+- "What is the capital of France?" → IRRELEVANT
+- "How do I add memory to my agent?" → RELEVANT
+
+Decision:"""
+
+        try:
+            relevance_response = llm.invoke(relevance_prompt).content.strip().upper()
+            _log(f"   Relevance check: {relevance_response}", state)
+
+            if "IRRELEVANT" in relevance_response:
+                _log("→ Router decision: END (question not relevant to LangChain/LangGraph)", state)
+                state["answer"] = "I'm a specialized assistant for LangChain and LangGraph documentation. Your question doesn't appear to be related to LangChain or LangGraph. I can only help with questions about LangChain, LangGraph, LangSmith, and related tools and concepts."
+                state["skip_retrieval"] = True
+                state["next_action"] = "end"
+                state["last_node"] = "router"
+                open(f"{state['output_dir']}/answer.md", "w", encoding="utf-8").write(state["answer"])
+                return state
+        except Exception as e:
+            _log(f"   Relevance check error: {str(e)}, assuming relevant", state)
+
+        _log(f"   Question is relevant, proceeding...", state)
 
     # ========== DECISION 1: Initial Entry (No Last Node) ==========
     if not last_node:
