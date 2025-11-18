@@ -13,16 +13,17 @@ This system uses an **agentic architecture** where an LLM makes intelligent rout
 ```
                     ┌──────────────┐
                     │    Router    │ ← LLM-driven decision maker
-                    │  (decides)   │
-                    └──────┬───────┘
+                    │  (decides &  │   - Safety & relevance checks
+                    │  validates)  │   - Context quality validation
+                    └──────┬───────┘   - Retry/refine decisions
                            │
         ┌──────────────────┼──────────────────┬──────────────┐
         │                  │                  │              │
         ▼                  ▼                  ▼              ▼
    ┌─────────┐       ┌─────────┐       ┌─────────┐   ┌─────────┐
    │Extract  │       │Retrieve │       │ Respond │   │ Reflect │
-   │Keywords │       │ (with   │       │ (with   │   │ (self-  │
-   │         │       │validate)│       │ refine) │   │critique)│
+   │Keywords │       │  (fetch │       │ (with   │   │ (self-  │
+   │         │       │   only) │       │ refine) │   │critique)│
    └────┬────┘       └────┬────┘       └────┬────┘   └────┬────┘
         │                 │                  │              │
         └─────────────────┴──────────────────┴──────────────┘
@@ -36,6 +37,9 @@ This system uses an **agentic architecture** where an LLM makes intelligent rout
 **1. Smart Routing** (`router_node`)
 - **Documentation-First Approach**: Strongly biased toward retrieving official documentation for 95%+ of questions
 - **Safety Gates**: Relevance check (filters non-LangGraph/LangChain questions) and safety check (detects jailbreak attempts)
+- **Context Validation**: After retrieval, validates context quality (relevance and sufficiency) and decides whether to retry with refined query or proceed
+- **Intelligent Retry Logic**: Up to 3 retrieval attempts with query refinement based on missing information
+- **Online Mode Control**: Switches from official docs to unrestricted web search when needed
 - Only skips retrieval for trivial definitional questions (e.g., "What does LLM stand for?")
 - Routes to extract_keywords, retrieve, respond, reflect, or end based on current state
 - LLM makes intelligent decisions about when documentation is truly unnecessary
@@ -46,14 +50,13 @@ This system uses an **agentic architecture** where an LLM makes intelligent rout
 - Excludes generic terms ("LangGraph", "LangChain", "difference")
 - Enables multi-query retrieval for comprehensive context coverage
 
-**3. Validated Retrieval** (`retrieve_node`)
+**3. Retrieval** (`retrieve_node`)
 - **Multi-Query Strategy**: First attempt uses extracted keywords for parallel searches; subsequent attempts use refined single queries
-- Retrieves documentation with up to 3 retry attempts
-- Validates context quality using LLM (checks both relevance and sufficiency)
-- Refines search queries if initial retrieval is insufficient
-- **Online Mode Fallback**: Attempt 1 uses official docs only; Attempt 2 uses unrestricted web search
+- Retrieves documentation and returns raw context to router
+- **Online Mode**: Supports switching between official docs only and unrestricted web search based on router decisions
 - Auto-fallback: online→offline if web search fails
 - Saves context to `context.txt` (offline) or `sources.txt` (online)
+- No validation logic - just fetches and returns data (validation happens in router)
 
 **4. Adaptive Response** (`respond_node`)
 - Generates answers from context or knowledge
@@ -93,6 +96,7 @@ The system uses 6 specialized LangChain tools:
   - Keywords: `skip_retrieval`, `extracted_keywords`
   - Validation: `context_is_sufficient`, `context_is_relevant`
   - Quality: `quality_score`, `routing_error`
+  - Retrieval control: `current_query`, `restrict_to_official`
 - **Conditional Routing**: Universal `route_by_next_action()` function based on LLM decisions, not fixed paths
 - **Iteration Limits**: Max 3 iterations for both retrieval refinement and answer regeneration; Max 50 recursion limit safety
 - **Agent Trace**: Saves decision-making history to `outputs/{timestamp}/agent_trace.json`
@@ -257,31 +261,42 @@ python main.py --verbose "How do I add persistence to a LangGraph agent?"
 Current state: context=False, answer=False, skip_retrieval=False, iteration=0/3
 → Asking LLM: Should we retrieve documentation?
    LLM decision: RETRIEVE
-→ Router decision: RETRIEVE
+→ Router decision: EXTRACT_KEYWORDS (start retrieval)
 
-━━━ RETRIEVE NODE ━━━
-Retrieval mode: 'offline', max attempts: 3
-
-  Attempt 1/3
-  Query: 'How do I add persistence to a LangGraph agent?'
-  ✓ Retrieved 8432 characters
-  Validation:
-    - Is Relevant: ✓ Yes
-    - Is Sufficient: ✓ Yes
-  ✓ SUCCESS: Context quality acceptable after 1 attempt(s)
+━━━ EXTRACT KEYWORDS NODE ━━━
+Extracting keywords from: 'How do I add persistence to a LangGraph agent?'
+  ✓ Extracted 2 keyword(s): persistence, SqliteSaver
+  → Will perform 3 searches: original + 2 keyword(s)
+  → Returning to router for next decision
 
 ━━━ ROUTER NODE ━━━
-Current state: context=True, answer=False, skip_retrieval=False, iteration=0/3
-→ Router decision: RESPOND (have context, need answer)
+→ Router decision: RETRIEVE (keywords extracted, fetch documentation)
+
+━━━ RETRIEVE NODE ━━━
+Retrieval mode: 'offline'
+Query: 'How do I add persistence to a LangGraph agent?'
+  Using multi-query retrieval with 2 keyword(s): ['persistence', 'SqliteSaver']
+  ✓ Retrieved 8432 characters (~2,108 tokens) from 3 source(s) [offline vector DB]
+  Context Summary: Persistence in LangGraph...
+  ✓ Context retrieved successfully
+  → Returning to router for validation and decision
+
+━━━ ROUTER NODE ━━━
+→ Validating retrieved context quality...
+  Validation Results:
+    - Is Relevant: ✓ Yes
+    - Is Sufficient: ✓ Yes
+→ Router decision: RESPOND (context quality good after 1 attempt(s))
 
 ━━━ RESPOND NODE ━━━
 Generating answer using 8432 characters of retrieved context
   Invoking LLM to generate answer...
   ✓ Answer generated successfully (1247 characters)
+  → Returning to router for next decision
 
 ━━━ ROUTER NODE ━━━
 Current state: context=True, answer=True, skip_retrieval=False, iteration=0/3
-→ Router decision: REFLECT (iteration 0/3)
+→ Router decision: REFLECT (evaluate answer quality, iteration 0/3)
 
 ━━━ REFLECT NODE ━━━
 Evaluating answer quality using LLM critic (iteration 0/3)...
@@ -290,7 +305,10 @@ Evaluating answer quality using LLM critic (iteration 0/3)...
     Score: 8/10
     Rating: ✓ Excellent
     Decision: ACCEPT (quality threshold met)
-  ✓ Answer is acceptable, proceeding to completion
+  → Returning to router for next decision
+
+━━━ ROUTER NODE ━━━
+→ Router decision: END (answer quality acceptable, score=8/10)
 ```
 
 **Benefits:**

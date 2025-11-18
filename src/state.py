@@ -26,3 +26,7 @@ class AgentState(TypedDict):
     context_is_relevant: bool
     quality_score: int
     routing_error: str
+
+    # Retrieval control fields
+    current_query: str
+    restrict_to_official: bool

@@ -213,38 +213,84 @@ Respond with ONLY one word - "RETRIEVE" or "ANSWER":"""
 
     # ========== DECISION 3: After Retrieve ==========
     if last_node == "retrieve":
-        _log(f"Context quality: relevant={context_is_relevant}, sufficient={context_is_sufficient}", state)
+        _log(f"→ Validating retrieved context quality...", state)
 
-        if context_is_sufficient and context_is_relevant:
-            _log("→ Router decision: RESPOND (context quality good)", state)
+        context = state.get("context", "")
+        retrieval_attempts = state.get("retrieval_attempts", 0)
+        mode = state.get("mode", "offline")
+        restrict_to_official = state.get("restrict_to_official", True)
+
+        # Check if retrieval failed
+        if context.startswith("Error:"):
+            _log(f"  ✗ Retrieval failed: {context}", state)
+            state["context_is_relevant"] = False
+            state["context_is_sufficient"] = False
+            _log("→ Router decision: RESPOND (with error context)", state)
             state["next_action"] = "respond"
-        elif not context_is_sufficient and state.get("retrieval_attempts", 0) < 2:
-            _log("→ Asking LLM: Retry retrieval or proceed?", state)
-            prompt = f"""Context quality is insufficient for this question. Should we retry retrieval or proceed?
+            state["last_node"] = "router"
+            return state
 
-Question: {state['question']}
-Retrieval attempts so far: {state.get('retrieval_attempts', 0)}
+        # Validate context quality
+        try:
+            validation = validate_context_quality(
+                question=state["question"],
+                context=context
+            )
 
-Respond with ONLY one word:
-- "RETRY" if we should try retrieving with a different query
-- "PROCEED" if we should generate an answer with what we have
+            is_relevant = validation.get("is_relevant", True)
+            is_sufficient = validation.get("is_sufficient", True)
+            missing_info = validation.get("missing_info", "")
 
-Decision:"""
-            try:
-                response = llm.invoke(prompt).content.strip().upper()
-                _log(f"   LLM decision: {response}", state)
+            state["context_is_relevant"] = is_relevant
+            state["context_is_sufficient"] = is_sufficient
 
-                if "RETRY" in response:
-                    _log("→ Router decision: EXTRACT_KEYWORDS (retry retrieval)", state)
-                    state["next_action"] = "extract_keywords"
-                else:
-                    _log("→ Router decision: RESPOND (proceed with current context)", state)
+            _log(f"  Validation Results:", state)
+            _log(f"    - Is Relevant: {'✓ Yes' if is_relevant else '✗ No'}", state)
+            _log(f"    - Is Sufficient: {'✓ Yes' if is_sufficient else '✗ No'}", state)
+            if missing_info:
+                _log(f"    - Missing info: {missing_info}", state)
+
+        except Exception as e:
+            _log(f"  ✗ Validation error: {str(e)}, assuming context is OK", state)
+            is_relevant = True
+            is_sufficient = True
+            state["context_is_relevant"] = True
+            state["context_is_sufficient"] = True
+
+        # Decide what to do based on validation
+        max_retrieval_attempts = 3
+
+        if is_sufficient and is_relevant:
+            _log(f"→ Router decision: RESPOND (context quality good after {retrieval_attempts} attempt(s))", state)
+            state["next_action"] = "respond"
+        elif retrieval_attempts < max_retrieval_attempts:
+            _log(f"→ Context quality insufficient (attempt {retrieval_attempts}/{max_retrieval_attempts})", state)
+
+            # For online mode: try unrestricted search if official docs failed
+            if mode == "online" and retrieval_attempts == 1 and restrict_to_official:
+                _log(f"  → Switching to unrestricted web search", state)
+                state["restrict_to_official"] = False
+                state["current_query"] = state["question"]
+                _log("→ Router decision: RETRIEVE (retry with unrestricted search)", state)
+                state["next_action"] = "retrieve"
+            else:
+                # Refine the query and retry
+                _log(f"  → Refining search query based on missing information...", state)
+                try:
+                    refined_query = refine_search_query(
+                        original_question=state["question"],
+                        feedback=missing_info or "Context not specific enough"
+                    )
+                    _log(f"  → Refined query: '{refined_query}'", state)
+                    state["current_query"] = refined_query
+                    _log("→ Router decision: RETRIEVE (retry with refined query)", state)
+                    state["next_action"] = "retrieve"
+                except Exception as e:
+                    _log(f"  ✗ Query refinement error: {str(e)}, proceeding with current context", state)
+                    _log("→ Router decision: RESPOND (proceed with available context)", state)
                     state["next_action"] = "respond"
-            except Exception as e:
-                _log(f"   Router error: {str(e)}, defaulting to RESPOND", state)
-                state["next_action"] = "respond"
         else:
-            _log("→ Router decision: RESPOND (proceeding with available context)", state)
+            _log(f"→ Router decision: RESPOND (max retrieval attempts reached: {max_retrieval_attempts})", state)
             state["next_action"] = "respond"
 
         state["last_node"] = "router"
@@ -339,122 +385,71 @@ def extract_keywords_node(state: AgentState) -> AgentState:
 
 
 def retrieve_node(state: AgentState) -> AgentState:
-    """Retrieve documentation with validation and retry logic."""
+    """Retrieve documentation and return raw context."""
     _log("\n------- RETRIEVE NODE -------", state)
 
-    max_attempts = 3
-    current_query = state["question"]
     keywords = state.get("extracted_keywords", [])
     mode = state.get("mode", "offline")
-    restrict_to_official = True
-    _log(f"Retrieval mode: '{mode}', max attempts: {max_attempts}", state)
+    current_query = state.get("current_query", state["question"])
+    restrict_to_official = state.get("restrict_to_official", True)
 
-    for attempt in range(1, max_attempts + 1):
-        _log(f"\n  Attempt {attempt}/{max_attempts}", state)
-        _log(f"  Query: '{current_query[:80]}...'", state) if len(current_query) > 80 else _log(f"  Query: '{current_query}'", state)
+    _log(f"Retrieval mode: '{mode}'", state)
+    _log(f"Query: '{current_query[:80]}...'", state) if len(current_query) > 80 else _log(f"Query: '{current_query}'", state)
 
-        if mode == "online" and attempt == 2 and restrict_to_official:
-            _log(f"  → Switching to unrestricted web search", state)
-            restrict_to_official = False
-            current_query = state["question"]
-
-        try:
-            if keywords and attempt == 1:
-                _log(f"  Using multi-query retrieval with {len(keywords)} keyword(s): {keywords}", state)
-                if mode == "offline":
-                    context = retrieve_with_keywords(current_query, keywords, mode)
-                else:
-                    context = retrieve_with_keywords(current_query, keywords, mode, restrict_to_official=restrict_to_official)
+    try:
+        # Retrieve context based on keywords or regular query
+        if keywords and state.get("retrieval_attempts", 0) == 0:
+            _log(f"  Using multi-query retrieval with {len(keywords)} keyword(s): {keywords}", state)
+            if mode == "offline":
+                context = retrieve_with_keywords(current_query, keywords, mode)
             else:
-                if mode == "offline":
-                    context = retrieve_documentation.invoke({"query": current_query, "mode": mode})
-                else:
-                    context = retrieve_documentation.invoke({
-                        "query": current_query,
-                        "mode": mode,
-                        "restrict_to_official": restrict_to_official
-                    })
-
-            validation = validate_context_quality(
-                question=state["question"],
-                context=context
-            )
-
-            is_relevant = validation.get("is_relevant", True)
-            is_sufficient = validation.get("is_sufficient", True)
-            missing_info = validation.get("missing_info", "")
-
-            # print for the user
-            char_count = len(context)
-            estimated_tokens = char_count // 4
-
-            source_count = context.count("=== Results for:")
-            if source_count == 0:
-                source_count = 1
-
-            search_scope = "official docs only" if (mode == "online" and restrict_to_official) else ("unrestricted web" if mode == "online" else "offline vector DB")
-            _log(f"  ✓ Retrieved {char_count} characters (~{estimated_tokens:,} tokens) from {source_count} source(s) [{search_scope}]", state)
-            
-            # context summary for the user
-            context_summary = context[:500].replace('\n', ' ').strip()
-            if len(context) > 500:
-                context_summary += "..."
-            _log(f"  Context Summary: {context_summary}", state)
-
-            _log(f"  Validation:", state)
-            _log(f"    - Is Relevant: {'✓ Yes' if is_relevant else '✗ No'}", state)
-            _log(f"    - Is Sufficient: {'✓ Yes' if is_sufficient else '✗ No'}", state)
-            if missing_info:
-                _log(f"    - Missing info: {missing_info}", state)
-
-            if is_relevant and is_sufficient:
-                state["context"] = context
-                state["retrieval_attempts"] = attempt
-                state["context_is_relevant"] = True
-                state["context_is_sufficient"] = True
-                _log(f"  ✓ SUCCESS: Context quality acceptable after {attempt} attempt(s)\n", state)
-
-                if mode == "offline":
-                    open(f"{state['output_dir']}/context.txt", "w", encoding="utf-8").write(context)
-                else:
-                    open(f"{state['output_dir']}/sources.txt", "w", encoding="utf-8").write(context)
-
-                break
-
-            if attempt < max_attempts:
-                if mode == "online" and attempt == 1 and restrict_to_official:
-                    _log(f"  ⚠ Official docs insufficient, will try unrestricted web search next", state)
-                else:
-                    _log(f"  ⚠ Context quality insufficient, refining query...", state)
-                    refined_query = refine_search_query(
-                        original_question=state["question"],
-                        feedback=missing_info or "Context not specific enough"
-                    )
-                    _log(f"  → Refined query: '{refined_query}'", state)
-                    current_query = refined_query
+                context = retrieve_with_keywords(current_query, keywords, mode, restrict_to_official=restrict_to_official)
+        else:
+            if mode == "offline":
+                context = retrieve_documentation.invoke({"query": current_query, "mode": mode})
             else:
-                _log(f"  Max attempts reached, accepting current context\n", state)
-                state["context"] = context
-                state["retrieval_attempts"] = attempt
-                state["context_is_relevant"] = is_relevant
-                state["context_is_sufficient"] = is_sufficient
+                context = retrieve_documentation.invoke({
+                    "query": current_query,
+                    "mode": mode,
+                    "restrict_to_official": restrict_to_official
+                })
 
-                if mode == "offline":
-                    open(f"{state['output_dir']}/context.txt", "w", encoding="utf-8").write(context)
-                else:
-                    open(f"{state['output_dir']}/sources.txt", "w", encoding="utf-8").write(context)
+        # Log retrieval stats for the user
+        char_count = len(context)
+        estimated_tokens = char_count // 4
+        source_count = context.count("=== Results for:")
+        if source_count == 0:
+            source_count = 1
 
-        except Exception as e:
-            _log(f"Retrieval error on attempt {attempt}: {str(e)}", state)
-            if attempt == max_attempts:
-                state["context"] = f"Error: Unable to retrieve documentation after {max_attempts} attempts"
-                state["retrieval_attempts"] = attempt
-                state["context_is_relevant"] = False
-                state["context_is_sufficient"] = False
+        search_scope = "official docs only" if (mode == "online" and restrict_to_official) else ("unrestricted web" if mode == "online" else "offline vector DB")
+        _log(f"  ✓ Retrieved {char_count} characters (~{estimated_tokens:,} tokens) from {source_count} source(s) [{search_scope}]", state)
+
+        # Context summary for the user
+        context_summary = context[:500].replace('\n', ' ').strip()
+        if len(context) > 500:
+            context_summary += "..."
+        _log(f"  Context Summary: {context_summary}", state)
+
+        # Store context
+        state["context"] = context
+        state["retrieval_attempts"] = state.get("retrieval_attempts", 0) + 1
+
+        # Save to file
+        if mode == "offline":
+            open(f"{state['output_dir']}/context.txt", "w", encoding="utf-8").write(context)
+        else:
+            open(f"{state['output_dir']}/sources.txt", "w", encoding="utf-8").write(context)
+
+        _log(f"  ✓ Context retrieved successfully\n", state)
+
+    except Exception as e:
+        _log(f"  ✗ Retrieval error: {str(e)}", state)
+        state["context"] = f"Error: Unable to retrieve documentation - {str(e)}"
+        state["retrieval_attempts"] = state.get("retrieval_attempts", 0) + 1
 
     state["last_node"] = "retrieve"
     state["next_action"] = "router"
-    _log("  → Returning to router for next decision", state)
+    _log("  → Returning to router for validation and decision", state)
 
     return state
 

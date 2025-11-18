@@ -11,7 +11,7 @@ def main():
     debug = True
     if debug:
         debug_args = {
-            "question": "How do I add persistence to a LangGraph agent?",
+            "question": "What's the difference between StateGraph and MessageGraph?",
             "mode": "online",
             "evaluate": True,
             "verbose": True

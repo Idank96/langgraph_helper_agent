@@ -100,7 +100,10 @@ def run_agent(question: str, mode: str = "offline", evaluate: bool = False):
         "context_is_sufficient": False,
         "context_is_relevant": False,
         "quality_score": 0,
-        "routing_error": ""
+        "routing_error": "",
+        # Retrieval control fields
+        "current_query": "",
+        "restrict_to_official": True
     }
 
     result = build_agent_graph(with_evaluation=evaluate).invoke(
