@@ -196,7 +196,7 @@ def retrieve_with_keywords(question: str, keywords: list, mode: str = "offline",
 
     Performs multiple searches and combines results, removing duplicates."""
     all_results = []
-    seen_content = set()
+    seen_content = set() # to avoid duplicate sources
 
     try:
         if mode == "offline":

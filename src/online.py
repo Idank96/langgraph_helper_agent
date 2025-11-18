@@ -15,7 +15,7 @@ def search_web(question: str, max_results: int = 10, restrict_to_official: bool 
             "query": question,
             "search_depth": "advanced",
             "max_results": max_results,
-            "include_answer": False
+            "include_answer": False # we only want raw results
         }
 
         if restrict_to_official:

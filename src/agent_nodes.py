@@ -384,6 +384,7 @@ def retrieve_node(state: AgentState) -> AgentState:
             is_sufficient = validation.get("is_sufficient", True)
             missing_info = validation.get("missing_info", "")
 
+            # print for the user
             char_count = len(context)
             estimated_tokens = char_count // 4
 
@@ -393,7 +394,8 @@ def retrieve_node(state: AgentState) -> AgentState:
 
             search_scope = "official docs only" if (mode == "online" and restrict_to_official) else ("unrestricted web" if mode == "online" else "offline vector DB")
             _log(f"  ✓ Retrieved {char_count} characters (~{estimated_tokens:,} tokens) from {source_count} source(s) [{search_scope}]", state)
-
+            
+            # context summary for the user
             context_summary = context[:500].replace('\n', ' ').strip()
             if len(context) > 500:
                 context_summary += "..."
