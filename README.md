@@ -573,7 +573,7 @@ LLM-AS-A-JUDGE EVALUATION SCORES
 ## Key Design Principles
 
 1. **Documentation-First Philosophy**: 95%+ questions trigger retrieval for accuracy and grounding
-2. **Centralized Routing**: Router node makes ALL routing decisions (not distributed across nodes)
+2. **Centralized Routing & Validation**: Router node makes ALL routing decisions AND validates context quality (separation of concerns: retrieve fetches, router decides)
 3. **Quality Over Speed**: Iterative refinement loops prioritize answer quality
 4. **Graceful Degradation**: Multiple fallback layers (online→offline, best-effort answers with disclaimers)
 5. **Transparency**: Explicit disclaimers when context insufficient, detailed agent traces
