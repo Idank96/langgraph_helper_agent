@@ -125,8 +125,8 @@ Question: {state['question']}
 Is this question related to LangChain, LangGraph, or their ecosystem (LangSmith, LCEL, etc.)?
 
 Respond with ONLY one word:
-- "RELEVANT" if the question is about LangChain/LangGraph features, usage, implementation, concepts, or integrations
-- "IRRELEVANT" if the question is completely unrelated to LangChain/LangGraph
+- "RELEVANT" if the question is about LangChain/LangGraph features, usage, implementation, concepts, or integrations, or general about LLMs
+- "IRRELEVANT" if the question is completely unrelated to LangChain/LangGraph Or LLMs
 
 Examples:
 - "How do I create a StateGraph?" → RELEVANT
@@ -398,7 +398,7 @@ def retrieve_node(state: AgentState) -> AgentState:
 
     keywords = state.get("extracted_keywords", [])
     mode = state.get("mode", "offline")
-    current_query = state.get("current_query", state["question"])
+    current_query = state.get("current_query") or state["question"]
     restrict_to_official = state.get("restrict_to_official", True)
 
     _log(f"Retrieval mode: '{mode}'", state)
