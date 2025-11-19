@@ -588,6 +588,9 @@ def reflect_node(state: AgentState) -> AgentState:
 
         state["quality_score"] = quality_score
 
+        # Increment iteration counter after each answer evaluation
+        state["iteration"] = iteration + 1
+
         _log(f"\n  Quality Assessment:", state)
         _log(f"    Score: {quality_score}/10", state)
 
@@ -603,7 +606,6 @@ def reflect_node(state: AgentState) -> AgentState:
 
         if quality_score < 7 and iteration < max_iterations:
             state["needs_refinement"] = True
-            state["iteration"] = iteration + 1
             state["refinement_notes"] = suggestions
             _log(f"    Decision: NEEDS REFINEMENT", state)
             _log(f"    Suggestions: {suggestions}", state)
