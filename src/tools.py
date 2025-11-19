@@ -1,5 +1,4 @@
 import json
-from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from src.offline import retrieve_context
 from src.online import search_web
@@ -7,7 +6,6 @@ from src.online import search_web
 MODEL_NAME = "gemini-2.0-flash"
 
 
-@tool
 def retrieve_documentation(query: str, mode: str = "offline", restrict_to_official: bool = True) -> str:
     """Retrieve documentation from offline vector store or online search.
 

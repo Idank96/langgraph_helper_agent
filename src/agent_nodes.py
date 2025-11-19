@@ -414,13 +414,13 @@ def retrieve_node(state: AgentState) -> AgentState:
                 context = retrieve_with_keywords(current_query, keywords, mode, restrict_to_official=restrict_to_official)
         else:
             if mode == "offline":
-                context = retrieve_documentation.invoke({"query": current_query, "mode": mode})
+                context = retrieve_documentation(query=current_query, mode=mode)
             else:
-                context = retrieve_documentation.invoke({
-                    "query": current_query,
-                    "mode": mode,
-                    "restrict_to_official": restrict_to_official
-                })
+                context = retrieve_documentation(
+                    query=current_query,
+                    mode=mode,
+                    restrict_to_official=restrict_to_official
+                )
 
         # Log retrieval stats for the user
         char_count = len(context)

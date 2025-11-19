@@ -72,12 +72,12 @@ This system uses an **agentic architecture** where an LLM makes intelligent rout
 - Sets `needs_refinement` flag and provides specific improvement suggestions
 - Limited to 3 iterations to prevent infinite loops
 
-### Agent Tools
+### Helper Functions
 
-The system uses 6 specialized LangChain tools:
+The system uses 6 specialized helper functions defined in `src/tools.py`:
 
-| Tool | Purpose | Returns |
-|------|---------|---------|
+| Function | Purpose | Returns |
+|----------|---------|---------|
 | `retrieve_documentation` | Fetch docs from offline/online sources | Retrieved text |
 | `validate_context_quality` | Check if context is relevant & sufficient | `{is_relevant, is_sufficient, missing_info}` |
 | `refine_search_query` | Generate improved query based on feedback | Refined query string |
@@ -109,7 +109,7 @@ langgraph_helper_agent/
 ├── src/
 │   ├── agent.py           # Agentic graph with conditional routing
 │   ├── agent_nodes.py     # Router, extract_keywords, retrieve, respond, reflect nodes
-│   ├── tools.py           # LangChain tools for retrieval & validation
+│   ├── tools.py           # Helper functions for retrieval & validation
 │   ├── state.py           # AgentState TypedDict with agentic fields
 │   ├── offline.py         # ChromaDB retrieval
 │   ├── online.py          # Tavily search
@@ -125,13 +125,9 @@ langgraph_helper_agent/
 │       ├── chat.md         # Full prompt and answer for debugging
 │       ├── agent_trace.json # Agent decision history
 │       └── evaluation.json # Optional eval scores
-├── examples/          # Example outputs and test cases
 ├── prepare_data.py    # Data preparation script
 ├── main.py            # CLI entry point with --verbose flag
-├── test_keyword_extraction.py  # Testing keyword extraction
-├── ARCHITECTURE.md    # Hybrid tool-calling design documentation
-├── REFINEMENT_LOOPS.md  # Advanced refinement features
-├── BUGFIX_REFINEMENT.md  # Implementation notes
+├── requirements.txt   # Python dependencies
 └── .env               # API keys (not in git)
 ```
 
@@ -577,12 +573,6 @@ LLM-AS-A-JUDGE EVALUATION SCORES
 5. **Transparency**: Explicit disclaimers when context insufficient, detailed agent traces
 6. **Safety-First**: Multiple validation gates (relevance, safety, loop prevention, iteration limits)
 7. **Production-Ready**: Rate limiting, error handling, observability features built-in
-
-## Additional Documentation
-
-- **ARCHITECTURE.md**: Hybrid tool-calling design and trade-offs between ReAct autonomy vs. predictability
-- **REFINEMENT_LOOPS.md**: Search refinement loop and quality refinement loop implementation details
-- **BUGFIX_REFINEMENT.md**: Implementation notes on validation flow fixes and rate limiting
 
 ## Future Improvements
 - Add more data sources (e.g., GitHub repos, StackOverflow)
